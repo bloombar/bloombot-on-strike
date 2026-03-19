@@ -13,7 +13,7 @@ export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_ORIGIN = new URL(COURSE_URL).origin
+  // const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [client, setClient] = useState(null as RealtimeClient | null)
