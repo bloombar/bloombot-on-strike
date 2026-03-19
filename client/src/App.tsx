@@ -80,7 +80,7 @@ export function App() {
 
       // Check if we're already paused before trying to record
       if (!wavRecorder.recording) {
-        await wavRecorder.record((data: { mono: Float32Array }) => client.appendInputAudio(data.mono))
+        await wavRecorder.record((data: { mono: Float32Array }) => client?.appendInputAudio(data.mono))
       }
     } catch (error) {
       console.error('Connection error:', error)
