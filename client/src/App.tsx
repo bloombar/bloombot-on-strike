@@ -12,11 +12,11 @@ const wavStreamPlayerRef = { current: null as WavStreamPlayer | null }
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
-  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  // const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const [client, setClient] = useState(null as RealtimeClient | null)
+  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_ORIGIN = new URL(COURSE_URL).origin
+  console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -34,13 +34,10 @@ export function App() {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
-    setClient(clientRef.current)
+    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
-    if (!client || !wavRecorder || !wavStreamPlayer) {
-      console.error('One or more required components are missing.')
-      return
-    }
+    if (!client || !wavRecorder || !wavStreamPlayer) return
 
     try {
       // Connect to microphone
