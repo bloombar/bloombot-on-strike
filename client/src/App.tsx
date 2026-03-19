@@ -155,6 +155,23 @@ export function App() {
       console.log(`Received postMessage: type=${type}, data=${data}`)
       if (type === 'response:keypress') {
         console.log(`Received keypress response: ${data}`)
+
+      if (type === 'response:keypress') {
+        console.log(`Received keypress response: ${data}`)
+        const iframe = iframeRef.current
+        if (!iframe) return
+
+        const iframeWindow = iframe.contentWindow
+        if (!iframeWindow) return
+
+        iframeWindow.postMessage(
+          {
+            type: 'getContent',
+            data: '.remark-visible',
+          },
+          COURSE_ORIGIN,
+        )
+        
       } else if (type === 'response:getContent') {
         console.log(`Received content response: ${data}`)
         client?.sendUserMessageContent([
@@ -180,7 +197,7 @@ export function App() {
       iframeWindow.postMessage(
         {
           type: 'keypress',
-          code: rightArrowKeyCode,
+          data: rightArrowKeyCode,
         },
         COURSE_ORIGIN,
       )
