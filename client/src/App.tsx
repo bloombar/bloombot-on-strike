@@ -153,24 +153,34 @@ export function App() {
       if (type === 'response:getContent') {
         // getContent complete
         console.log('Received content response from child:', data)
+        // send slide content to OpenAI via realtime API
+        client?.sendUserMessageContent([
+          {
+            type: `input_text`,
+            text: `Explain the current new part of the current slide content within 10 seconds: ${data}`,
+          },
+        ])
       } else if (type === 'request:keypress') {
         // keypress complete
         console.log('Received keypress response from child:', data)
       }
     })
 
+    const getIFrameWindow = () => {
+      const iframe = iframeRef.current
+      if (!iframe) return null
+      return iframe.contentWindow
+    }
+
     const triggerRightArrow = () => {
       /**
        * This function simulates a right arrow key press in the iframe to advance to the next slide
        */
-      const iframe = iframeRef.current
-      if (!iframe) return
-
-      const iframeWindow = iframe.contentWindow
-      if (!iframeWindow) return
+      const iFrameWindow = getIFrameWindow()
+      if (!iFrameWindow) return
 
       // simulate a right arrow key press to advance to the next slide
-      iframeWindow.postMessage(
+      iFrameWindow.postMessage(
         {
           type: 'keypress',
           data: rightArrowKeyCode,
