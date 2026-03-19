@@ -4,9 +4,10 @@ import asyncio
 import json
 import logging
 import os
+
+from aiohttp import ClientSession, WSMsgType, web
 from dotenv import load_dotenv
 import websockets
-from websockets.legacy.server import WebSocketServerProtocol, serve
 from websockets.legacy.client import connect
 
 logging.basicConfig(
@@ -15,16 +16,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-PORT = int(os.getenv("PORT", 3000))
+PORT = int(os.getenv("PORT", "3000"))
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
+REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY must be set in .env file")
 
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+
 async def connect_to_openai():
     """Connect to OpenAI's WebSocket endpoint."""
-    uri = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
+    uri = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"
 
     try:
         ws = await connect(
@@ -42,33 +52,20 @@ async def connect_to_openai():
         try:
             event = json.loads(response)
             if event.get("type") != "session.created":
-                raise Exception(f"Expected session.created, got {event.get('type')}")
+                raise RuntimeError(f"Expected session.created, got {event.get('type')}")
             logger.info("Received session.created response")
-
-            update_session = {
-                "type": "session.update",
-                "session": {
-                    "type": "realtime",
-                    "model": "gpt-realtime",
-                    "audio": {
-                        "output": {
-                            "voice": "alloy",
-                        }
-                    },
-                },
-            }
-            await ws.send(json.dumps(update_session))
-            logger.info("Sent session.create message")
 
             return (
                 ws,
                 event,
             )
-        except json.JSONDecodeError:
-            raise Exception(f"Invalid JSON response from OpenAI: {response}")
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Invalid JSON response from OpenAI: {response}"
+            ) from exc
 
     except Exception as e:
-        logger.error(f"Failed to connect to OpenAI: {str(e)}")
+        logger.error("Failed to connect to OpenAI: %s", e)
         raise
 
 
@@ -76,23 +73,55 @@ class WebSocketRelay:
     def __init__(self):
         """Initialize the WebSocket relay server."""
         self.connections = {}
-        self.message_queues = {}
 
-    async def handle_browser_connection(
-        self, websocket: WebSocketServerProtocol, path: str
-    ):
+    async def create_ephemeral_key(self, session_payload: dict | None = None):
+        request_body = {
+            "expires_after": {
+                "anchor": "created_at",
+                "seconds": 60,
+            },
+            "session": session_payload
+            or {
+                "type": "realtime",
+                "model": REALTIME_MODEL,
+            },
+        }
+
+        async with ClientSession() as http_session:
+            async with http_session.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=request_body,
+            ) as response:
+                data = await response.json()
+                return response.status, data
+
+    async def handle_session_options(self, _request: web.Request):
+        return web.Response(status=204, headers=CORS_HEADERS)
+
+    async def handle_session_create(self, request: web.Request):
+        try:
+            payload = await request.json() if request.can_read_body else {}
+        except json.JSONDecodeError:
+            return web.json_response(
+                {"error": "Invalid JSON body"}, status=400, headers=CORS_HEADERS
+            )
+
+        status, data = await self.create_ephemeral_key(payload.get("session"))
+        return web.json_response(data, status=status, headers=CORS_HEADERS)
+
+    async def handle_browser_connection(self, request: web.Request):
         """
         Handle a connection from the browser.
         Validate the path and establish a connection to OpenAI, then relay messages between the browser and OpenAI.
         """
-        base_path = path.split("?")[0]
-        if base_path != "/":
-            logger.error(f"Invalid path: {path}")
-            await websocket.close(1008, "Invalid path")
-            return
+        websocket = web.WebSocketResponse(protocols=("realtime",))
+        await websocket.prepare(request)
 
-        logger.info(f"Browser connected from {websocket.remote_address}")
-        self.message_queues[websocket] = []
+        logger.info("Browser connected from %s", request.remote)
         openai_ws = None
 
         try:
@@ -102,18 +131,8 @@ class WebSocketRelay:
 
             logger.info("Connected to OpenAI successfully!")
 
-            await websocket.send(json.dumps(session_created))
+            await websocket.send_str(json.dumps(session_created))
             logger.info("Forwarded session.created to browser")
-
-            # Relay any queued messages from the browser to OpenAI
-            while self.message_queues[websocket]:
-                message = self.message_queues[websocket].pop(0)
-                try:
-                    event = json.loads(message)
-                    logger.info(f'Relaying "{event.get("type")}" to OpenAI')
-                    await openai_ws.send(message)
-                except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON from browser: {message}")
 
             async def handle_browser_messages():
                 """
@@ -121,21 +140,22 @@ class WebSocketRelay:
                 """
 
                 try:
-                    while True:
-                        # Wait for a message from the browser
-                        message = await websocket.recv()
-                        try:
-                            # Attempt to parse the message as JSON to log the event type
-                            event = json.loads(message)
-                            logger.info(f'Relaying "{event.get("type")}" to OpenAI')
-                            # Relay the raw message to OpenAI
-                            await openai_ws.send(message)
-                        except json.JSONDecodeError:
-                            logger.error(f"Invalid JSON from browser: {message}")
-                except websockets.exceptions.ConnectionClosed as e:
-                    logger.info(
-                        f"Browser connection closed normally: code={e.code}, reason={e.reason}"
-                    )
+                    async for message in websocket:
+                        if message.type == WSMsgType.TEXT:
+                            try:
+                                event = json.loads(message.data)
+                                logger.info(
+                                    'Relaying "%s" to OpenAI', event.get("type")
+                                )
+                                await openai_ws.send(message.data)
+                            except json.JSONDecodeError:
+                                logger.error(
+                                    "Invalid JSON from browser: %s", message.data
+                                )
+                        elif message.type == WSMsgType.ERROR:
+                            raise websocket.exception()
+                except Exception as e:
+                    logger.info("Browser connection closed normally: %s", e)
                     raise
 
             async def handle_openai_messages():
@@ -150,15 +170,19 @@ class WebSocketRelay:
                             # Attempt to parse the message as JSON to log the event type
                             event = json.loads(message)
                             logger.info(
-                                f'Relaying "{event.get("type")}" from OpenAI: {message}'
+                                'Relaying "%s" from OpenAI: %s',
+                                event.get("type"),
+                                message,
                             )
                             # Relay the raw message to the browser
-                            await websocket.send(message)
+                            await websocket.send_str(message)
                         except json.JSONDecodeError:
-                            logger.error(f"Invalid JSON from OpenAI: {message}")
+                            logger.error("Invalid JSON from OpenAI: %s", message)
                 except websockets.exceptions.ConnectionClosed as e:
                     logger.info(
-                        f"OpenAI connection closed normally: code={e.code}, reason={e.reason}"
+                        "OpenAI connection closed normally: code=%s, reason=%s",
+                        e.code,
+                        e.reason,
                     )
                     raise
 
@@ -170,35 +194,37 @@ class WebSocketRelay:
             except websockets.exceptions.ConnectionClosed:
                 logger.info("One of the connections closed, cleaning up")
 
-        except Exception as e:
-            logger.error(f"Error handling connection: {str(e)}")
+        except (RuntimeError, OSError, websockets.exceptions.WebSocketException) as e:
+            logger.error("Error handling connection: %s", e)
             if not websocket.closed:
-                await websocket.close(1011, str(e))
+                await websocket.close(code=1011, message=str(e).encode())
         finally:
-            # Clean up connections and message queues
+            # Clean up connections
             if websocket in self.connections:
                 if openai_ws and not openai_ws.closed:
                     await openai_ws.close(1000, "Normal closure")
                 del self.connections[websocket]
-            if websocket in self.message_queues:
-                del self.message_queues[websocket]
             if not websocket.closed:
-                await websocket.close(1000, "Normal closure")
+                await websocket.close(code=1000, message=b"Normal closure")
+
+        return websocket
 
     async def serve(self):
         """
         Start the WebSocket relay server.
         """
-        async with serve(
-            self.handle_browser_connection,
-            "0.0.0.0",
-            PORT,
-            ping_interval=20,
-            ping_timeout=20,
-            subprotocols=["realtime"],
-        ):
-            logger.info(f"WebSocket relay server started on ws://0.0.0.0:{PORT}")
-            await asyncio.Future()
+        app = web.Application()
+        app.router.add_route("OPTIONS", "/session", self.handle_session_options)
+        app.router.add_post("/session", self.handle_session_create)
+        app.router.add_get("/", self.handle_browser_connection)
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", PORT)
+        await site.start()
+
+        logger.info("Relay server started on http://0.0.0.0:%s", PORT)
+        await asyncio.Future()
 
 
 def main():
