@@ -16,6 +16,7 @@ export function App() {
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [client, setClient] = useState(null as RealtimeClient | null)
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -33,7 +34,7 @@ export function App() {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
-    const client = clientRef.current
+    setClient(clientRef.current)
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
     if (!client || !wavRecorder || !wavStreamPlayer) return
@@ -141,23 +142,52 @@ export function App() {
   useEffect(() => {
     const rightArrowKeyCode = 39
 
+    // wait for messages from the iframe (e.g. responses to requests for the current slide content)
+    window.addEventListener('message', (event) => {
+      // SECURITY: check origin!
+      // if (event.origin !== 'https://child-origin.com') return
+
+      const { type, data } = event.data
+
+      // response to getContent message
+      if (type === 'response:getContent') {
+        // getContent complete
+        console.log('Received content response from child:', data)
+      } else if (type === 'request:keypress') {
+        // keypress complete
+        console.log('Received keypress response from child:', data)
+      }
+    })
+
     const triggerRightArrow = () => {
+      /**
+       * This function simulates a right arrow key press in the iframe to advance to the next slide
+       */
       const iframe = iframeRef.current
       if (!iframe) return
 
       const iframeWindow = iframe.contentWindow
       if (!iframeWindow) return
 
+      // simulate a right arrow key press to advance to the next slide
       iframeWindow.postMessage(
         {
-          action: 'keypress',
-          key: rightArrowKeyCode,
+          type: 'keypress',
+          data: rightArrowKeyCode,
         },
         COURSE_ORIGIN,
       )
+
+      // send slide content to the server
+      // client?.sendUserMessageContent([
+      //   {
+      //     type: `input_text`,
+      //     text: `Hello!`,
+      //   },
+      // ])
     }
 
-    const intervalId = window.setInterval(triggerRightArrow, 15000)
+    const intervalId = window.setInterval(triggerRightArrow, 10000)
     return () => {
       window.clearInterval(intervalId)
     }
