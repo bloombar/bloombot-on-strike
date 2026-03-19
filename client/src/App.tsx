@@ -37,7 +37,10 @@ export function App() {
     setClient(clientRef.current)
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
-    if (!client || !wavRecorder || !wavStreamPlayer) return
+    if (!client || !wavRecorder || !wavStreamPlayer) {
+      console.error('One or more required components are missing.')
+      return
+    }
 
     try {
       // Connect to microphone
@@ -47,6 +50,7 @@ export function App() {
       await wavStreamPlayer.connect()
 
       // Connect to realtime API
+      console.log('Really trying to connect to the client.')
       await client.connect()
 
       setConnectionStatus('connected')
