@@ -28,6 +28,17 @@ const coerceRequestBody = (body) => ({
 })
 
 app.post('/', (req, res) => {
+  /**
+   * Authorization endpoint for Zoom meeting join.
+   * Request body should include:
+   * {
+   *   meetingNumber: string | number (required)
+   *   role: 0 for attendee, 1 for host (required)
+   *   expirationSeconds: number of seconds after which the signature expires, between 1800 and 172800 (optional, defaults to 2 hours)
+   *   videoWebRtcMode: 0 for default Zoom video, 1 for WebRTC video (optional, defaults to 0)
+   * }
+   */
+
   const requestBody = coerceRequestBody(req.body)
   const validationErrors = validateRequest(requestBody, propValidations, schemaValidations)
 
@@ -55,6 +66,32 @@ app.post('/', (req, res) => {
   const sPayload = JSON.stringify(oPayload)
   const sdkJWT = KJUR.jws.JWS.sign('HS256', sHeader, sPayload, process.env.ZOOM_OAUTH_CLIENT_SECRET)
   return res.json({ signature: sdkJWT, sdkKey: process.env.ZOOM_OAUTH_CLIENT_ID })
+})
+
+app.post('/api/chat', (req, res) => {
+  console.log(`Received chat event: ${JSON.stringify(req.body)}`)
+
+  try {
+    // ensureParentDirectory(config.chatLogPath)
+
+    const body = req.body || {}
+    const payload = {
+      recordedAt: new Date().toISOString(),
+      meetingNumber: body.meetingNumber || process.env.ZOOM_MEETING_NUMBER || null,
+      event: body.event || 'onReceiveChatMsg',
+      sender: body.sender || body.displayName || body.userName || body.name || null,
+      recipient: body.recipient || body.toContact || body.receiver || body.to || null,
+      message: body.message || body.text || body.msgBody || body.content || null,
+      raw: body.raw || body
+    }
+
+    console.log('Received chat message event:', JSON.stringify(payload))
+
+    // appendLine(config.chatLogPath, payload)
+    return res.status(202).json({ accepted: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Failed to write chat message' })
+  }
 })
 
 app.listen(port, () => console.log(`Zoom Meeting SDK Auth Endpoint Sample Node.js, listening on port ${port}!`))
