@@ -46,6 +46,53 @@ export function App() {
     wavStreamPlayerRef.current = new WavStreamPlayer({ sampleRate: 24000 })
   }
   const isConnectedRef = useRef(false)
+  const getEphemeralKey = useCallback(async () => {
+    if (!RELAY_SERVER_URL) {
+      throw new Error('Missing relay server URL for ephemeral key request')
+    }
+
+    const relayUrl = new URL(RELAY_SERVER_URL)
+    const sessionUrl = new URL('/session', relayUrl)
+    sessionUrl.protocol = relayUrl.protocol === 'wss:' ? 'https:' : 'http:'
+
+    const response = await fetch(sessionUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session: {
+          type: 'realtime',
+          model: 'gpt-realtime',
+          instructions,
+          audio: {
+            input: {
+              format: 'pcm16',
+              turn_detection: { type: 'server_vad' },
+            },
+            output: {
+              format: 'pcm16',
+            },
+          },
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Ephemeral key request failed with HTTP ${response.status}`)
+    }
+
+    const data = (await response.json()) as {
+      client_secret?: { value?: string }
+    }
+    const ephemeralKey = data.client_secret?.value
+    if (!ephemeralKey) {
+      throw new Error('Ephemeral key response did not include client_secret.value')
+    }
+
+    return ephemeralKey
+  }, [RELAY_SERVER_URL])
+
   const connectConversation = useCallback(async () => {
     if (isConnectedRef.current) return
     if (!RELAY_SERVER_URL) return
@@ -80,9 +127,11 @@ export function App() {
         listenersBoundRef.current = true
       }
 
+      const ephemeralKey = await getEphemeralKey()
+
       // Connect to realtime API through relay websocket
       await session.connect({
-        apiKey: 'relay-session-token',
+        apiKey: ephemeralKey,
         url: RELAY_SERVER_URL,
         model: 'gpt-realtime',
       })
@@ -107,7 +156,7 @@ export function App() {
       setConnectionStatus('disconnected')
       isConnectedRef.current = false
     }
-  }, [RELAY_SERVER_URL])
+  }, [RELAY_SERVER_URL, getEphemeralKey])
 
   const errorMessage = !RELAY_SERVER_URL
     ? 'Missing required "wss" parameter in URL'
