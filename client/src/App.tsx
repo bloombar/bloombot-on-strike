@@ -17,6 +17,7 @@ export function App() {
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
+  let client: RealtimeClient | null = null
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -34,7 +35,7 @@ export function App() {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
-    const client = clientRef.current
+    client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
     if (!client || !wavRecorder || !wavStreamPlayer) return
@@ -138,6 +139,58 @@ export function App() {
       }
     }
   }, [errorMessage])
+
+  useEffect(() => {
+    // look out for responses to postMessages from a child window
+    window.addEventListener('message', function (event) {
+      /**
+       * Expected message format in event.data:
+       * {
+       *   type: "response:keypress" | "response:getContent",
+       *   data: any
+       * }
+       */
+      const { type, data } = event.data
+
+      console.log(`Received postMessage: type=${type}, data=${data}`)
+      if (type === 'response:keypress') {
+        console.log(`Received keypress response: ${data}`)
+      } else if (type === 'response:getContent') {
+        console.log(`Received content response: ${data}`)
+        client?.sendUserMessageContent([
+          {
+            type: `input_text`,
+            text: `Explain the new text in this slide: ${data}`,
+          },
+        ])
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    const rightArrowKeyCode = 39
+
+    const triggerRightArrow = () => {
+      const iframe = iframeRef.current
+      if (!iframe) return
+
+      const iframeWindow = iframe.contentWindow
+      if (!iframeWindow) return
+
+      iframeWindow.postMessage(
+        {
+          type: 'keypress',
+          code: rightArrowKeyCode,
+        },
+        COURSE_ORIGIN,
+      )
+    }
+
+    const intervalId = window.setInterval(triggerRightArrow, 15000)
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [COURSE_ORIGIN])
 
   return (
     <div className="app-container">
