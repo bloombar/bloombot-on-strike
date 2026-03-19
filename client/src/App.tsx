@@ -12,11 +12,7 @@ const wavStreamPlayerRef = { current: null as WavStreamPlayer | null }
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
-  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const [client, setClient] = useState(null as RealtimeClient | null)
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -34,13 +30,10 @@ export function App() {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
-    setClient(clientRef.current)
+    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
-    if (!client || !wavRecorder || !wavStreamPlayer) {
-      console.error('One or more required components are missing.')
-      return
-    }
+    if (!client || !wavRecorder || !wavStreamPlayer) return
 
     try {
       // Connect to microphone
@@ -50,7 +43,6 @@ export function App() {
       await wavStreamPlayer.connect()
 
       // Connect to realtime API
-      console.log('Really trying to connect to the client.')
       await client.connect()
 
       setConnectionStatus('connected')
@@ -143,61 +135,8 @@ export function App() {
     }
   }, [errorMessage])
 
-  useEffect(() => {
-    // look out for responses to postMessages from a child window
-    window.addEventListener('message', function (event) {
-      /**
-       * Expected message format in event.data:
-       * {
-       *   type: "response:keypress" | "response:getContent",
-       *   data: any
-       * }
-       */
-      const { type, data } = event.data
-
-      console.log(`Received postMessage: type=${type}, data=${data}`)
-      if (type === 'response:keypress') {
-        console.log(`Received keypress response: ${data}`)
-      } else if (type === 'response:getContent') {
-        console.log(`Received content response: ${data}`)
-        client?.sendUserMessageContent([
-          {
-            type: `input_text`,
-            text: `Explain the new text in this slide: ${data}`,
-          },
-        ])
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    const rightArrowKeyCode = 39
-
-    const triggerRightArrow = () => {
-      const iframe = iframeRef.current
-      if (!iframe) return
-
-      const iframeWindow = iframe.contentWindow
-      if (!iframeWindow) return
-
-      iframeWindow.postMessage(
-        {
-          type: 'keypress',
-          code: rightArrowKeyCode,
-        },
-        COURSE_ORIGIN,
-      )
-    }
-
-    const intervalId = window.setInterval(triggerRightArrow, 15000)
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [COURSE_ORIGIN])
-
   return (
     <div className="app-container">
-      <iframe ref={iframeRef} className="course-frame" src={COURSE_URL} title="Continuous Integration Course Slides" />
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">
