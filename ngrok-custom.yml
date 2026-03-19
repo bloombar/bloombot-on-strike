@@ -1,0 +1,15 @@
+version: 3
+
+agent:
+  authtoken: 3BAR9g8VKr9NrQlR6Ag4jZA4qPf_bA8RMb66A4dxip4QdEbp
+  api_key: 3BAU3OpiyRfCXyTrO2Y9M5j3cba_vfxpEgGixpV83MAri26r
+
+endpoints:
+  - name: python-server
+    # pooling_enabled: false
+    upstream:
+      url: 3000
+  - name: front-end
+    # pooling_enabled: false
+    upstream:
+      url: 5173
