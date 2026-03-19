@@ -43,7 +43,7 @@ BOT_NAME = os.getenv("BOT_NAME", "Bloombot-on-Strike")
 # the web page the bot will screenshare in the meeting
 SCREENSHARE_WEBPAGE_URL = os.getenv(
     "SCREENSHARE_WEBPAGE_URL",
-    "https://recallai-demo.netlify.app?wss=wss://309a-173-68-85-115.ngrok-free.app",
+    "https://recallai-demo.netlify.app?wss=wss://bloombar.github.io/bloombot-on-strike/",
 )
 
 print(

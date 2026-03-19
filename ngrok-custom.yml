@@ -9,7 +9,7 @@ endpoints:
     # pooling_enabled: false
     upstream:
       url: 3000
-  - name: front-end
-    # pooling_enabled: false
-    upstream:
-      url: 5173
+  # - name: front-end
+  #   # pooling_enabled: false
+  #   upstream:
+  #     url: 5173
