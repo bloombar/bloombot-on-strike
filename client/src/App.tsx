@@ -16,6 +16,7 @@ export function App() {
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [client, setClient] = useState(null as RealtimeClient | null)
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -33,7 +34,7 @@ export function App() {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
-    const client = clientRef.current
+    setClient(clientRef.current)
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
     if (!client || !wavRecorder || !wavStreamPlayer) return
@@ -137,6 +138,33 @@ export function App() {
       }
     }
   }, [errorMessage])
+
+  useEffect(() => {
+    // look out for responses to postMessages from a child window
+    window.addEventListener('message', function (event) {
+      /**
+       * Expected message format in event.data:
+       * {
+       *   type: "response:keypress" | "response:getContent",
+       *   data: any
+       * }
+       */
+      const { type, data } = event.data
+
+      console.log(`Received postMessage: type=${type}, data=${data}`)
+      if (type === 'response:keypress') {
+        console.log(`Received keypress response: ${data}`)
+      } else if (type === 'response:getContent') {
+        console.log(`Received content response: ${data}`)
+        client?.sendUserMessageContent([
+          {
+            type: `input_text`,
+            text: `Explain the new text in this slide: ${data}`,
+          },
+        ])
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const rightArrowKeyCode = 39
