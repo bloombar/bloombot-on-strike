@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
+    "@openai/agents": "^0.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
