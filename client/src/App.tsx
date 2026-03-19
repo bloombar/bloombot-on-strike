@@ -12,7 +12,10 @@ const wavStreamPlayerRef = { current: null as WavStreamPlayer | null }
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
+  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -135,8 +138,34 @@ export function App() {
     }
   }, [errorMessage])
 
+  useEffect(() => {
+    const rightArrowKeyCode = 39
+
+    const triggerRightArrow = () => {
+      const iframe = iframeRef.current
+      if (!iframe) return
+
+      const iframeWindow = iframe.contentWindow
+      if (!iframeWindow) return
+
+      iframeWindow.postMessage(
+        {
+          action: 'keypress',
+          key: rightArrowKeyCode,
+        },
+        COURSE_ORIGIN,
+      )
+    }
+
+    const intervalId = window.setInterval(triggerRightArrow, 15000)
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [COURSE_ORIGIN])
+
   return (
     <div className="app-container">
+      <iframe ref={iframeRef} className="course-frame" src={COURSE_URL} title="Continuous Integration Course Slides" />
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">
