@@ -150,8 +150,8 @@ export function App() {
 
       iframeWindow.postMessage(
         {
-          action: 'keypress',
-          key: rightArrowKeyCode,
+          type: 'keypress',
+          code: rightArrowKeyCode,
         },
         COURSE_ORIGIN,
       )
