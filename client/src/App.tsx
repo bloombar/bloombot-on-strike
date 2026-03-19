@@ -31,7 +31,6 @@ export function App() {
   }
   const isConnectedRef = useRef(false)
   const connectConversation = useCallback(async () => {
-  const connectConversation = useCallback(async () => {
     if (isConnectedRef.current) return
     isConnectedRef.current = true
     setConnectionStatus('connecting')
