@@ -157,22 +157,20 @@ export function App() {
         console.log(`Received keypress response: ${data}`)
 
         ///start
-        if (type === 'response:keypress') {
-          console.log(`Received keypress response: ${data}`)
-          const iframe = iframeRef.current
-          if (!iframe) return
+        console.log(`Received keypress response: ${data}`)
+        const iframe = iframeRef.current
+        if (!iframe) return
 
-          const iframeWindow = iframe.contentWindow
-          if (!iframeWindow) return
+        const iframeWindow = iframe.contentWindow
+        if (!iframeWindow) return
 
-          iframeWindow.postMessage(
-            {
-              type: 'getContent',
-              data: '.remark-visible',
-            },
-            COURSE_ORIGIN,
-          )
-        }
+        iframeWindow.postMessage(
+          {
+            type: 'getContent',
+            data: '.remark-visible',
+          },
+          COURSE_ORIGIN,
+        )
 
         ///end
       } else if (type === 'response:getContent') {
