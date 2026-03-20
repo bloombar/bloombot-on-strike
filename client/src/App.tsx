@@ -210,7 +210,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const intervalId = window.setInterval(triggerRightArrow, 1000)
+    const intervalId = window.setInterval(triggerRightArrow, 10000)
     return () => {
       window.clearInterval(intervalId)
     }
