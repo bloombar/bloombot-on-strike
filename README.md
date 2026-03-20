@@ -1,12 +1,12 @@
-# Recall.ai Real-Time Voice Agent
+# Bloombot-on-Strike (a.k.a ScabBot)
 
-### [Watch the Demo Here!](https://www.loom.com/share/2a02fac2643441c1990da861e829892c)
+This application is specifically designed to replace a university faculty member who is on strike. In other words, it is a ScabBot. It uses AI and code spit to automatically deliver lectures on Zoom in an equally- or more-compelling fashion.
 
-This demo application uses Recall.ai's [Output Media](https://docs.recall.ai/docs/stream-media) feature and OpenAI's [real-time API](https://platform.openai.com/docs/guides/realtime) to add an interactive voice agent to meetings.
+The software uses Recall.ai's [Output Media](https://docs.recall.ai/docs/stream-media) feature and OpenAI's [real-time API](https://platform.openai.com/docs/guides/realtime) to add an interactive voice agent to meetings.
 
 ## Prerequisites
 
-1. [Python 3.8+](https://www.python.org/downloads/) (for Python server implementation)
+1. [Python 3.8+](https://www.python.org/downloads/)
 1. [Ngrok](https://ngrok.com/docs/getting-started/)
 1. [Recall.ai API Key](https://www.recall.ai/)
 1. [OpenAI API Key](https://platform.openai.com/docs/overview)
