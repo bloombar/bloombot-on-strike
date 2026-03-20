@@ -21,14 +21,14 @@ git clone ...
 
 ### Install Dependencies
 
-#### Client
+#### Client (Node.js)
 
 ```bash
 cd client
 npm install
 ```
 
-#### Server
+#### Server (Python)
 
 The server implementation is available in Python.
 
@@ -46,13 +46,17 @@ pipenv shell
 
 Note: You **must** add credits to your OpenAI account before running this demo. If your account has no credits, the demo will connect successfully, but the bot will not respond to anything you say in the meeting.
 
-#### Python Server
+#### Client cCnfiguration
 
-In the python-server directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `3000` if not specified.
+In the `client` directory, copy the `.env.example` file and rename it to `.env`. Then modify the settings therein.
+
+#### Python Server Configuration
+
+In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `3000` if not specified.
 
 ## Quickstart
 
-If you want to quickly test the functionality of this application, you don't need to host the frontend yourself. You can use our pre-hosted demo frontend at [https://recallai-demo.netlify.app](https://recallai-demo.netlify.app). However, you will still need to provide your OpenAI API key and ngrok URL.
+If you want to quickly test the functionality of this application, you don't need to host the frontend yourself. You can use Recall AI's pre-hosted demo frontend at [https://recallai-demo.netlify.app](https://recallai-demo.netlify.app). However, you will still need to provide your OpenAI API key and ngrok URL.
 
 1. Start your backend server and expose it using ngrok:
 
