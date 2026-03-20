@@ -14,6 +14,7 @@ export function App() {
   const RELAY_SERVER_URL = params.get('wss')
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const slidesContentRef = useRef<string[]>([])
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
@@ -99,6 +100,24 @@ export function App() {
         }
       })()
 
+  const triggerRightArrow = () => {
+    const rightArrowKeyCode = 39
+
+    const iframe = iframeRef.current
+    if (!iframe) return
+
+    const iframeWindow = iframe.contentWindow
+    if (!iframeWindow) return
+
+    iframeWindow.postMessage(
+      {
+        type: 'keypress',
+        data: rightArrowKeyCode,
+      },
+      COURSE_ORIGIN,
+    )
+  }
+
   /**
    * Core RealtimeClient and audio capture setup
    * Set all of our instructions, tools, events and more
@@ -175,10 +194,15 @@ export function App() {
         ///end
       } else if (type === 'response:getContent') {
         console.log(`Received content response: ${data}`)
-        client?.sendUserMessageContent([
+        const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
+        const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
+
+        slidesContentRef.current.push(data)
+
+        clientRef.current?.sendUserMessageContent([
           {
             type: `input_text`,
-            text: `Explain the new text in this slide. Keep it short and focus on what is new in each slide compared to the last. Do not speak about the slide headings: ${data}`,
+            text: `Explain the new concepts in this slide. Keep it short and fast for an educated audience. Do not mention that the text comes from a "slide". Add color and context to the concepts: ${slideDiff || data}`,
           },
         ])
       }
@@ -186,24 +210,6 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const rightArrowKeyCode = 39
-
-    const triggerRightArrow = () => {
-      const iframe = iframeRef.current
-      if (!iframe) return
-
-      const iframeWindow = iframe.contentWindow
-      if (!iframeWindow) return
-
-      iframeWindow.postMessage(
-        {
-          type: 'keypress',
-          data: rightArrowKeyCode,
-        },
-        COURSE_ORIGIN,
-      )
-    }
-
     const intervalId = window.setInterval(triggerRightArrow, 15000)
     return () => {
       window.clearInterval(intervalId)
