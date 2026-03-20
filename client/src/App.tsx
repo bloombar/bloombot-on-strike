@@ -16,6 +16,7 @@ export function App() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const slidesContentRef = useRef<string[]>([])
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  // const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
@@ -100,19 +101,26 @@ export function App() {
         }
       })()
 
-  const triggerRightArrow = () => {
-    const rightArrowKeyCode = 39
-
+  const getIFrameWindow = (): Window => {
+    /**
+     * Get the contentWindow of the iframe, if it exists.
+     */
     const iframe = iframeRef.current
-    if (!iframe) return
+    if (!iframe) throw new Error('iFrame not found')
 
     const iframeWindow = iframe.contentWindow
-    if (!iframeWindow) return
+    if (!iframeWindow) throw new Error('iFrame contentWindow not found')
+    return iframeWindow
+  }
+
+  const triggerRightArrow = () => {
+    const iframeWindow = getIFrameWindow()
+    console.log(`Triggering right arrow keypress in iframe at origin ${COURSE_ORIGIN}`)
 
     iframeWindow.postMessage(
       {
-        type: 'keypress',
-        data: rightArrowKeyCode,
+        type: 'nextSlide',
+        data: null,
       },
       COURSE_ORIGIN,
     )
@@ -165,12 +173,21 @@ export function App() {
   }, [errorMessage])
 
   useEffect(() => {
+    /**
+     * Start the component and set up event listeners.
+     *
+     */
+    // start by flipping to the first slide
+    console.log(`App mounted. Starting...`)
+    triggerRightArrow()
+
     // look out for responses to postMessages from a child window
     window.addEventListener('message', function (event) {
       /**
+       * Look out for incoming response messages.
        * Expected message format in event.data:
        * {
-       *   type: "response:keypress" | "response:getContent",
+       *   type: "responses:nextSlide | responses:previousSlide | responses:goToSlide | response:keypress" | "response:getContent",
        *   data: any
        * }
        */
@@ -180,13 +197,7 @@ export function App() {
       if (type === 'response:keypress') {
         // console.log(`Received keypress response: ${data}`)
 
-        ///start
-        // console.log(`Received keypress response: ${data}`)
-        const iframe = iframeRef.current
-        if (!iframe) return
-
-        const iframeWindow = iframe.contentWindow
-        if (!iframeWindow) return
+        const iframeWindow = getIFrameWindow()
 
         iframeWindow.postMessage(
           {
@@ -199,6 +210,7 @@ export function App() {
         ///end
       } else if (type === 'response:getContent') {
         // console.log(`Received content response: ${data}`)
+        // get the difference between this slide and the previous
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
 
@@ -212,10 +224,6 @@ export function App() {
         ])
       }
     })
-  }, [])
-
-  useEffect(() => {
-    triggerRightArrow()
   }, [COURSE_ORIGIN])
 
   return (
