@@ -17,7 +17,7 @@ export function App() {
   const slidesContentRef = useRef<string[]>([])
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
-  console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
+  // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
   let slideShowIntervalSeconds = 10
   let intervalId: number // slideshow timer interval
@@ -182,12 +182,12 @@ export function App() {
        */
       const { type, data } = event.data
 
-      console.log(`Received postMessage: type=${type}, data=${data}`)
+      // console.log(`Received postMessage: type=${type}, data=${data}`)
       if (type === 'response:keypress') {
-        console.log(`Received keypress response: ${data}`)
+        // console.log(`Received keypress response: ${data}`)
 
         ///start
-        console.log(`Received keypress response: ${data}`)
+        // console.log(`Received keypress response: ${data}`)
         const iframe = iframeRef.current
         if (!iframe) return
 
@@ -204,7 +204,7 @@ export function App() {
 
         ///end
       } else if (type === 'response:getContent') {
-        console.log(`Received content response: ${data}`)
+        // console.log(`Received content response: ${data}`)
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
 
