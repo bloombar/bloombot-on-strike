@@ -19,6 +19,9 @@ export function App() {
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
+  let slideShowIntervalSeconds = 10
+  let intervalId: number // slideshow timer interval
+  const [slideShowStatus, setSlideShowStatus] = useState<'playing' | 'paused'>('paused')
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -136,6 +139,8 @@ export function App() {
       // handle realtime events from client + server for event logging
       client.on('error', (event: any) => console.error(event))
       client.on('conversation.interrupted', async () => {
+        setSlideShowStatus('paused')
+        console.log('Conversation interrupted.')
         const trackSampleOffset = await wavStreamPlayer.interrupt()
         if (trackSampleOffset?.trackId) {
           const { trackId, offset } = trackSampleOffset
@@ -143,6 +148,8 @@ export function App() {
         }
       })
       client.on('conversation.updated', async ({ item, delta }: any) => {
+        console.log('Conversation updated:', { item, delta })
+        setSlideShowStatus('playing')
         client.conversation.getItems()
         if (delta?.audio) {
           wavStreamPlayer.add16BitPCM(delta.audio, item.id)
@@ -210,11 +217,22 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const intervalId = window.setInterval(triggerRightArrow, 10000)
+    // start the slide show
+    setSlideShowStatus('playing') // start playing!
+    intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000)
     return () => {
       window.clearInterval(intervalId)
     }
   }, [COURSE_ORIGIN])
+
+  useEffect(() => {
+    // pause or play when status changes
+    if (slideShowStatus === 'paused') {
+      window.clearInterval(intervalId) // pause!
+    } else if (slideShowStatus === 'playing') {
+      intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000) // play!
+    }
+  })
 
   return (
     <div className="app-container">
