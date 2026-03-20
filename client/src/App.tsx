@@ -147,9 +147,13 @@ export function App() {
           await client.cancelResponse(trackId, offset)
         }
       })
+      client.on('conversation.resumed', () => {
+        console.log('Conversation resumed.')
+        setSlideShowStatus('playing')
+      })
       client.on('conversation.updated', async ({ item, delta }: any) => {
         console.log('Conversation updated:', { item, delta })
-        setSlideShowStatus('playing')
+        // setSlideShowStatus('playing')
         client.conversation.getItems()
         if (delta?.audio) {
           wavStreamPlayer.add16BitPCM(delta.audio, item.id)
@@ -230,9 +234,12 @@ export function App() {
     if (slideShowStatus === 'paused') {
       window.clearInterval(intervalId) // pause!
     } else if (slideShowStatus === 'playing') {
-      intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000) // play!
+      // play if not already doing so
+      if (!intervalId) {
+        intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000) // play!
+      }
     }
-  })
+  }, [slideShowStatus])
 
   return (
     <div className="app-container">
