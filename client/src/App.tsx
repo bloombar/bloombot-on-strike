@@ -224,7 +224,7 @@ export function App() {
         setMarkdownSource(data)
         // start the show!
         console.log('Starting lecture...')
-        this.setTimeout(
+        this.setInterval(
           () => {
             goToNextSlide()
           },
@@ -245,10 +245,6 @@ export function App() {
           },
         ])
       } else if (type === 'response:nextSlide') {
-        // trigger next slide in 5-10 seconds
-        setTimeout(() => {
-          goToNextSlide()
-        }, 10000)
       }
     })
   }, [iFrameLoaded])
