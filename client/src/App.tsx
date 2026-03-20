@@ -178,7 +178,7 @@ export function App() {
         client?.sendUserMessageContent([
           {
             type: `input_text`,
-            text: `Explain the new text in this slide: ${data}`,
+            text: `Explain the new text in this slide. Keep it short and focus on what is new in each slide compared to the last. Do not speak about the slide headings: ${data}`,
           },
         ])
       }
