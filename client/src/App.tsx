@@ -13,10 +13,12 @@ export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const [iFrameLoaded, setIFrameLoaded] = useState(false)
+  const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const slidesContentRef = useRef<string[]>([])
-  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  // const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  // const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
@@ -113,10 +115,9 @@ export function App() {
     return iframeWindow
   }
 
-  const triggerRightArrow = () => {
+  const goToNextSlide = () => {
+    console.log('Triggering next slide...')
     const iframeWindow = getIFrameWindow()
-    console.log(`Triggering right arrow keypress in iframe at origin ${COURSE_ORIGIN}`)
-
     iframeWindow.postMessage(
       {
         type: 'nextSlide',
@@ -126,11 +127,25 @@ export function App() {
     )
   }
 
+  useEffect(() => {
+    // once iframe has loaded, get all slides content from textarea markdown source data
+    const iframeWindow = getIFrameWindow()
+    iframeWindow.postMessage(
+      {
+        type: 'getMarkdownSource',
+        data: null,
+      },
+      COURSE_ORIGIN,
+    )
+  }, [iFrameLoaded])
+
   /**
    * Core RealtimeClient and audio capture setup
    * Set all of our instructions, tools, events and more
    */
   useEffect(() => {
+    console.log('Setting up RealtimeClient and audio tools...')
+
     // Only run the effect if there's no error
     if (!errorMessage) {
       connectConversation()
@@ -139,12 +154,12 @@ export function App() {
       if (!client || !wavStreamPlayer) return
 
       // Set instructions
-      client.updateSession({ instructions: instructions })
+      client.updateSession({ instructions: instructions.replace('{MARKDOWN_SOURCE}', markdownSource) })
 
       // handle realtime events from client + server for event logging
       client.on('error', (event: any) => console.error(event))
       client.on('conversation.interrupted', async () => {
-        console.log('Conversation interrupted.')
+        // console.log('Conversation interrupted.')
         const trackSampleOffset = await wavStreamPlayer.interrupt()
         if (trackSampleOffset?.trackId) {
           const { trackId, offset } = trackSampleOffset
@@ -152,17 +167,16 @@ export function App() {
         }
       })
       client.on('conversation.updated', async ({ item, delta }: any) => {
-        console.log('Conversation updated:', { item, delta })
+        // console.log('Conversation updated:', { item, delta })
         client.conversation.getItems()
         if (delta?.audio) {
-          console.log('Received audio delta. Playing response...')
+          // console.log('Received audio delta. Playing response...')
           wavStreamPlayer.add16BitPCM(delta.audio, item.id)
         }
         if (item.status === 'completed' && item.formatted.audio?.length) {
-          console.log('Conversation item completed with audio response. Decoding and playing response...')
+          // console.log('Conversation item completed with audio response. Decoding and playing response...')
           const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000)
           item.formatted.file = wavFile
-          triggerRightArrow()
         }
       })
 
@@ -170,16 +184,12 @@ export function App() {
         client.reset()
       }
     }
-  }, [errorMessage])
+  }, [markdownSource, errorMessage])
 
   useEffect(() => {
     /**
-     * Start the component and set up event listeners.
-     *
+     * Set up event listeners.
      */
-    // start by flipping to the first slide
-    console.log(`App mounted. Starting...`)
-    triggerRightArrow()
 
     // look out for responses to postMessages from a child window
     window.addEventListener('message', function (event) {
@@ -191,6 +201,8 @@ export function App() {
        *   data: any
        * }
        */
+
+      // destructure the data coming in from postMessage
       const { type, data } = event.data
 
       // console.log(`Received postMessage: type=${type}, data=${data}`)
@@ -198,7 +210,6 @@ export function App() {
         // console.log(`Received keypress response: ${data}`)
 
         const iframeWindow = getIFrameWindow()
-
         iframeWindow.postMessage(
           {
             type: 'getContent',
@@ -208,6 +219,17 @@ export function App() {
         )
 
         ///end
+      } else if (type === 'response:getMarkdownSource') {
+        // console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
+        setMarkdownSource(data)
+        // start the show!
+        console.log('Starting lecture...')
+        this.setTimeout(
+          () => {
+            goToNextSlide()
+          },
+          10000, // delay the first slide by 10 seconds to give the LLM time to process the instructions and markdown source
+        )
       } else if (type === 'response:getContent') {
         // console.log(`Received content response: ${data}`)
         // get the difference between this slide and the previous
@@ -219,16 +241,27 @@ export function App() {
         clientRef.current?.sendUserMessageContent([
           {
             type: `input_text`,
-            text: `Explain the new concepts in this slide. Keep it short and fast for an educated audience. Do not mention that the text comes from a "slide". Add color and context to the concepts: ${slideDiff || data}`,
+            text: `Explain the new concepts in this HTML code in under 10 seconds. Do not mention that the text comes from a "slide" or from HTML code: ${slideDiff || data}`,
           },
         ])
+      } else if (type === 'response:nextSlide') {
+        // trigger next slide in 5-10 seconds
+        setTimeout(() => {
+          goToNextSlide()
+        }, 10000)
       }
     })
-  }, [COURSE_ORIGIN])
+  }, [iFrameLoaded])
 
   return (
     <div className="app-container">
-      <iframe ref={iframeRef} className="course-frame" src={COURSE_URL} title="Continuous Integration Course Slides" />
+      <iframe
+        ref={iframeRef}
+        onLoad={() => setIFrameLoaded(true)}
+        className="course-frame"
+        src={COURSE_URL}
+        title="Continuous Integration Course Slides"
+      />
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">
