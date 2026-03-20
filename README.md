@@ -73,7 +73,13 @@ Then in a separate terminal:
 ngrok http 3000
 ```
 
-2. Create a bot by sending the following curl request, replacing `YOUR_RECALL_TOKEN` and `YOUR_NGROK_URL` with your values:
+2. The command to launch the bot into a Zoom call is encapsulated in the `run.py` script, using settings in the `.env` file.
+
+```python
+python run.py
+```
+
+In a nutshell, this script executes a CURL command equivalent to that below, where `YOUR_RECALL_TOKEN` and `YOUR_NGROK_URL` are replaced with values from the `.env` file.
 
 ```bash
 curl --request POST \
@@ -98,12 +104,6 @@ curl --request POST \
       "microsoft_teams": "web_4_core"
     }
   }'
-```
-
-This command has been automated in the `run.py` script, using settings in the `.env` file. Execute that alternatively:
-
-```python
-python run.py
 ```
 
 The bot will join your meeting URL and stream the demo webpage's content directly to your meeting.
