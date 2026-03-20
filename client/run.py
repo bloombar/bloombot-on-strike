@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-
-# # launch the front-end client
+"""
+Launch the front-end client into a Zoom call using the Recall AI API
+"""
 
 # curl --request POST \
 #   --url https://us-west-2.recall.ai/api/v1/bot/ \
