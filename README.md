@@ -96,6 +96,12 @@ curl --request POST \
   }'
 ```
 
+This command has been automated in the `run.py` script, using settings in the `.env` file. Execute that alternatively:
+
+```python
+python run.py
+```
+
 The bot will join your meeting URL and stream the demo webpage's content directly to your meeting.
 
 If you'd like to customize the webpage shown by the bot, or change the interaction with the OpenAI agent, follow the complete setup instructions below.
