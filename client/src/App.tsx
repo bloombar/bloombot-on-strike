@@ -167,7 +167,7 @@ export function App() {
         iframeWindow.postMessage(
           {
             type: 'getContent',
-            data: '.remark-visible',
+            data: '.remark-visible .remark-slide-content', // CSS selector for the content we want to read from the slide
           },
           COURSE_ORIGIN,
         )
