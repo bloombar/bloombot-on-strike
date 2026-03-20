@@ -19,9 +19,6 @@ export function App() {
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
-  let slideShowIntervalSeconds = 10
-  let intervalId: number // slideshow timer interval
-  const [slideShowStatus, setSlideShowStatus] = useState<'playing' | 'paused'>('paused')
 
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
@@ -139,7 +136,6 @@ export function App() {
       // handle realtime events from client + server for event logging
       client.on('error', (event: any) => console.error(event))
       client.on('conversation.interrupted', async () => {
-        setSlideShowStatus('paused')
         console.log('Conversation interrupted.')
         const trackSampleOffset = await wavStreamPlayer.interrupt()
         if (trackSampleOffset?.trackId) {
@@ -147,20 +143,18 @@ export function App() {
           await client.cancelResponse(trackId, offset)
         }
       })
-      client.on('conversation.resumed', () => {
-        console.log('Conversation resumed.')
-        setSlideShowStatus('playing')
-      })
       client.on('conversation.updated', async ({ item, delta }: any) => {
         console.log('Conversation updated:', { item, delta })
-        // setSlideShowStatus('playing')
         client.conversation.getItems()
         if (delta?.audio) {
+          console.log('Received audio delta. Playing response...')
           wavStreamPlayer.add16BitPCM(delta.audio, item.id)
         }
         if (item.status === 'completed' && item.formatted.audio?.length) {
+          console.log('Conversation item completed with audio response. Decoding and playing response...')
           const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000)
           item.formatted.file = wavFile
+          triggerRightArrow()
         }
       })
 
@@ -221,25 +215,8 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    // start the slide show
-    setSlideShowStatus('playing') // start playing!
-    intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000)
-    return () => {
-      window.clearInterval(intervalId)
-    }
+    triggerRightArrow()
   }, [COURSE_ORIGIN])
-
-  useEffect(() => {
-    // pause or play when status changes
-    if (slideShowStatus === 'paused') {
-      window.clearInterval(intervalId) // pause!
-    } else if (slideShowStatus === 'playing') {
-      // play if not already doing so
-      if (!intervalId) {
-        intervalId = window.setInterval(triggerRightArrow, slideShowIntervalSeconds * 1000) // play!
-      }
-    }
-  }, [slideShowStatus])
 
   return (
     <div className="app-container">
