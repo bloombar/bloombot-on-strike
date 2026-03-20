@@ -17,8 +17,8 @@ export function App() {
   const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const slidesContentRef = useRef<string[]>([])
-  // const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  // const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
   let client: RealtimeClient | null = null
