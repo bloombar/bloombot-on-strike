@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import asyncio
-import json, yaml
+import json
 import re
 import logging
 import os
 from pathlib import Path
+import yaml
 from dotenv import load_dotenv
 from websockets.asyncio.server import serve
 
