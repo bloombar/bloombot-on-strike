@@ -13,6 +13,7 @@ export function App() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [iFrameLoaded, setIFrameLoaded] = useState(false)
   const slidesContentRef = useRef<string[]>([])
+  const slidesIntervalRef = useRef<number>(0)
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
 
   // require a valid URL for the websocket relay server
@@ -31,20 +32,23 @@ export function App() {
   const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(RELAY_SERVER_URL, {
     onOpen: () => {
       console.log('client: websocket opened')
-      // send confirmation message to server on connection open
-      sendJsonMessage({
-        type: 'handshake',
-        data: {
-          client_url: COURSE_URL,
-          // instructions: instructions,
-          course_title: COURSE_TITLE,
-          lecture_notes: 'twas brilllig and the slithy toves did gyre and gimble in the wabe',
-        },
-      })
     },
     //Will attempt to reconnect on all close events, such as server shutting down
     shouldReconnect: (closeEvent) => true,
   })
+
+  useEffect(() => {
+    // send confirmation message to server once we have the lecture content
+    sendJsonMessage({
+      type: 'handshake',
+      data: {
+        client_url: COURSE_URL,
+        // instructions: instructions,
+        course_title: COURSE_TITLE,
+        lecture_notes: markdownSource,
+      },
+    })
+  }, [markdownSource])
 
   // connectionStatus is human-readable version of readystate
   const connectionStatus = {
@@ -99,29 +103,29 @@ export function App() {
   }, [iFrameLoaded])
 
   useEffect(() => {
+    /**
+     * Set up event listeners.
+     */
+
     // look out for responses to postMessages from a child window
     window.addEventListener('message', function (event) {
       /**
+       * Look out for incoming response messages.
        * Expected message format in event.data:
        * {
-       *   type: "response:keypress" | "response:getContent",
+       *   type: "responses:nextSlide | responses:previousSlide | responses:goToSlide | response:keypress" | "response:getContent",
        *   data: any
        * }
        */
+
+      // destructure the data coming in from postMessage
       const { type, data } = event.data
 
       // console.log(`Received postMessage: type=${type}, data=${data}`)
       if (type === 'response:keypress') {
         // console.log(`Received keypress response: ${data}`)
 
-        ///start
-        // console.log(`Received keypress response: ${data}`)
-        const iframe = iframeRef.current
-        if (!iframe) return
-
-        const iframeWindow = iframe.contentWindow
-        if (!iframeWindow) return
-
+        const iframeWindow = getIFrameWindow()
         iframeWindow.postMessage(
           {
             type: 'getContent',
@@ -131,17 +135,30 @@ export function App() {
         )
 
         ///end
+      } else if (type === 'response:getMarkdownSource') {
+        // console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
+        setMarkdownSource(data)
+        // start the show!
+        console.log('Starting lecture...')
+        // set new slide carousel timer
+        window.clearInterval(slidesIntervalRef.current) // cancel any previous timers
+        slidesIntervalRef.current = window.setInterval(
+          () => {
+            goToNextSlide()
+          },
+          10000, // delay the first slide by 10 seconds to give the LLM time to process the instructions and markdown source
+        )
       } else if (type === 'response:getContent') {
         // console.log(`Received content response: ${data}`)
+        // get the difference between this slide and the previous
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
+        slidesContentRef.current.push(data)
+        // do something more with slide content?
+      } else if (type === 'response:nextSlide') {
       }
     })
-  }, [])
-
-  useEffect(() => {
-    gotoNextSlide()
-  }, [COURSE_ORIGIN])
+  }, [iFrameLoaded])
 
   return (
     <div className="app-container">

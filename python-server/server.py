@@ -82,7 +82,7 @@ async def handler(websocket):
                     # },
                     {
                         "role": "system",
-                        "content": f"You will deliver a classroom lecture specifically covering the topics in these notes: {lecture_notes}",
+                        "content": f"Imagine you are a bot named ScabBot who is covering for Professor Amos Bloomberg, who is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf today.",
                     },
                 ],
                 metadata={"client_url": f"{client_url}"},
@@ -122,18 +122,22 @@ async def handler(websocket):
                     input=[
                         {
                             "role": "system",
-                            "content": "Give a summary of the lecture notes.",
-                        }
+                            "content": f"In this conversation, you will speak exclusively about these Markdown lecture notes: {lecture_notes}",
+                        },
+                        {
+                            "role": "system",
+                            "content": "Summarize the lecture notes given in the previous input.",
+                        },
                     ],
                     conversation=oa_conversation_id,
-                    tools=[
-                        {
-                            "type": "file_search",
-                            "vector_store_ids": [
-                                oa_config.get("vector_store_id", None)
-                            ],
-                        }
-                    ],
+                    # tools=[
+                    #     {
+                    #         "type": "file_search",
+                    #         "vector_store_ids": [
+                    #             oa_config.get("vector_store_id", None)
+                    #         ],
+                    #     }
+                    # ],
                     max_output_tokens=2048,
                     store=True,
                 )
