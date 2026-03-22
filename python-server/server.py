@@ -82,7 +82,7 @@ async def handler(websocket):
                     # },
                     {
                         "role": "system",
-                        "content": f"Imagine you are a bot named ScabBot who is covering for Professor Amos Bloomberg, who is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf today.",
+                        "content": f'Today, you are a bot named "ScabBot" who is covering for Professor Amos Bloomberg. Prof. Bloomberg is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf to the class today.',
                     },
                 ],
                 metadata={"client_url": f"{client_url}"},
@@ -126,7 +126,7 @@ async def handler(websocket):
                         },
                         {
                             "role": "system",
-                            "content": "Summarize the lecture notes given in the previous input.",
+                            "content": "Explain who you are and briefly summarize what you will cover today, based on the lecture notes given in the previous input.",
                         },
                     ],
                     conversation=oa_conversation_id,
@@ -154,6 +154,59 @@ async def handler(websocket):
 
             # clean up the response by removing any 【source】 references
             openai_response = re.sub(r"【.*?】", "", openai_response).strip()
+
+        # handle requests for text to speak
+        elif event["type"] == "request_spoken_text":
+            data = event["data"]
+
+            # get the conversation ID for this URL
+            oa_conversation_id = openai_conversations[client_url].id
+
+            # ask OpenAI to generate text to explain the new slide content
+            try:
+                openai_response = openai_client.responses.create(
+                    model=oa_config.get("model", OPENAI_DEFAULT_MODEL),
+                    prompt={
+                        "id": oa_config.get(
+                            "prompt_id", None
+                        ),  # get prompt ID from config
+                    },
+                    input=[
+                        {
+                            "role": "system",
+                            "content": f"Act like a professor and explain slide to students. Keep it under 2 sentences. Do not mention that the information is from a slide.: {data}",
+                        }
+                    ],
+                    conversation=oa_conversation_id,
+                    max_output_tokens=2048,
+                    store=True,
+                )
+
+                # extract the text from the response
+                openai_response = openai_response.output_text.strip()
+
+            except Exception as e:
+                logger.error(f"Error from OpenAI API: {e}")
+                openai_response = f"Sorry, I can't respond intelligently right now. Please see {course_title} admins for help."
+
+            # clean up the response by removing any 【source】 references
+            openai_response = re.sub(r"【.*?】", "", openai_response).strip()
+
+            logger.info(
+                f"OpenAI response to request for text to speak: {openai_response}"
+            )
+
+            # send the response back to client
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "response_spoken_text",
+                        "data": {
+                            "response": openai_response,
+                        },
+                    }
+                )
+            )
 
 
 async def main():

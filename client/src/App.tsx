@@ -136,7 +136,7 @@ export function App() {
 
         ///end
       } else if (type === 'response:getMarkdownSource') {
-        // console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
+        console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
         setMarkdownSource(data)
         // start the show!
         console.log('Starting lecture...')
@@ -148,21 +148,36 @@ export function App() {
           },
           10000, // delay the first slide by 10 seconds to give the LLM time to process the instructions and markdown source
         )
+      } else if (type === 'response:nextSlide') {
+        // we have transitioned to a new slide... get its content
+        const iframeWindow = getIFrameWindow()
+        iframeWindow.postMessage(
+          {
+            type: 'getContent',
+            data: '.remark-visible .remark-slide-content', // CSS selector for the content we want to read from the slide
+          },
+          COURSE_ORIGIN,
+        )
       } else if (type === 'response:getContent') {
-        // console.log(`Received content response: ${data}`)
+        // we have new slide content...
         // get the difference between this slide and the previous
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
+        if (!slideDiff) return
         slidesContentRef.current.push(data)
-        // do something more with slide content?
-      } else if (type === 'response:nextSlide') {
+
+        // slide carousel has transitioned... get the text to speak about the new slide from the server
+        sendJsonMessage({
+          type: 'request_spoken_text',
+          data: slideDiff,
+        })
       }
     })
   }, [iFrameLoaded])
 
   return (
     <div className="app-container">
-      <iframe ref={iframeRef} className="course-frame" src={COURSE_URL} title="Continuous Integration Course Slides" />
+      <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />{' '}
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">
