@@ -9,6 +9,7 @@ export function App() {
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
+  const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const slidesContentRef = useRef<string[]>([])
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
