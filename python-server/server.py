@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
 import asyncio
-import json
+import json, yaml
+import re
 import logging
 import os
+from pathlib import Path
 from dotenv import load_dotenv
-import websockets
-from websockets.legacy.server import WebSocketServerProtocol, serve
-from websockets.legacy.client import connect
+from websockets.asyncio.server import serve
+
+import openai
+from openai import OpenAI
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -15,178 +18,146 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-PORT = int(os.getenv("PORT", 3000))
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PORT = int(os.getenv("PORT", "3000"))
+CONFIG_FILE = Path("bot_config.yml").resolve()  # path to the configuration file
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # from .env file
+OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY must be set in .env file")
 
+# create OpenAI client
+openai_conversations = {}  # will hold separate threads keyed by client browser URL
+openai_client = OpenAI()
 
-async def connect_to_openai():
-    """Connect to OpenAI's WebSocket endpoint."""
-    uri = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
-
-    try:
-        ws = await connect(
-            uri,
-            extra_headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-                "OpenAI-Beta": "realtime=v1",
-            },
-            subprotocols=["realtime"],
-        )
-        logger.info("Successfully connected to OpenAI")
-
-        response = await ws.recv()
-        try:
-            event = json.loads(response)
-            if event.get("type") != "session.created":
-                raise Exception(f"Expected session.created, got {event.get('type')}")
-            logger.info("Received session.created response")
-
-            update_session = {
-                "type": "session.update",
-                "session": {
-                    "input_audio_format": "pcm16",
-                    "output_audio_format": "pcm16",
-                    "modalities": ["text", "audio"],
-                    "voice": "marin",
-                },
-            }
-            await ws.send(json.dumps(update_session))
-            logger.info("Sent session.create message")
-
-            return (
-                ws,
-                event,
-            )
-        except json.JSONDecodeError:
-            raise Exception(f"Invalid JSON response from OpenAI: {response}")
-
-    except Exception as e:
-        logger.error(f"Failed to connect to OpenAI: {str(e)}")
-        raise
+# load the config data from file
+with open(CONFIG_FILE, encoding="utf-8", mode="r") as f:
+    config = yaml.safe_load(f)
+    # get server name
+    SERVER_NAME = config["server"]["name"]
+    courses = config["server"]["courses"]
 
 
-class WebSocketRelay:
-    def __init__(self):
-        """Initialize the WebSocket relay server."""
-        self.connections = {}
-        self.message_queues = {}
+async def handler(websocket):
+    """
+    Handle incoming websocket messages from client.
+    """
+    async for message in websocket:
+        event = json.loads(message)  # parse message as JSON
+        print(f"server received websocket message: {message}")
 
-    async def handle_browser_connection(
-        self, websocket: WebSocketServerProtocol, path: str
-    ):
-        """Handle a connection from the browser."""
-        base_path = path.split("?")[0]
-        if base_path != "/":
-            logger.error(f"Invalid path: {path}")
-            await websocket.close(1008, "Invalid path")
-            return
+        # do basic setup if starting conversation
+        if event["type"] == "handshake":
+            data = event["data"]
 
-        logger.info(f"Browser connected from {websocket.remote_address}")
-        self.message_queues[websocket] = []
-        openai_ws = None
+            # data expected from client:
+            # instructions = data["instructions"]
+            client_url = data["client_url"]
+            course_title = data["course_title"]
+            lecture_notes = data["lecture_notes"]
 
-        try:
-            # Connect to OpenAI
-            openai_ws, session_created = await connect_to_openai()
-            self.connections[websocket] = openai_ws
-
-            logger.info("Connected to OpenAI successfully!")
-
-            await websocket.send(json.dumps(session_created))
-            logger.info("Forwarded session.created to browser")
-
-            while self.message_queues[websocket]:
-                message = self.message_queues[websocket].pop(0)
-                try:
-                    event = json.loads(message)
-                    logger.info(f'Relaying "{event.get("type")}" to OpenAI')
-                    await openai_ws.send(message)
-                except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON from browser: {message}")
-
-            async def handle_browser_messages():
-                try:
-                    while True:
-                        message = await websocket.recv()
-                        try:
-                            event = json.loads(message)
-                            logger.info(f'Relaying "{event.get("type")}" to OpenAI')
-                            await openai_ws.send(message)
-                        except json.JSONDecodeError:
-                            logger.error(f"Invalid JSON from browser: {message}")
-                except websockets.exceptions.ConnectionClosed as e:
+            # get the OpenAI Responses API Prompt for this course
+            oa_prompt_id = None
+            oa_conversation_id = None
+            for course in courses:
+                if course["title"] == course_title:
+                    oa_config = course.get("openai_assistant", {})
+                    oa_prompt_id = oa_config.get("prompt_id", None)
                     logger.info(
-                        f"Browser connection closed normally: code={e.code}, reason={e.reason}"
+                        f"Using OpenAI Prompt ID: {oa_prompt_id} for course '{course_title}'"
                     )
-                    raise
-
-            async def handle_openai_messages():
-                try:
-                    while True:
-                        message = await openai_ws.recv()
-                        try:
-                            event = json.loads(message)
-                            logger.info(
-                                f'Relaying "{event.get("type")}" from OpenAI: {message}'
-                            )
-                            await websocket.send(message)
-                        except json.JSONDecodeError:
-                            logger.error(f"Invalid JSON from OpenAI: {message}")
-                except websockets.exceptions.ConnectionClosed as e:
-                    logger.info(
-                        f"OpenAI connection closed normally: code={e.code}, reason={e.reason}"
-                    )
-                    raise
-
-            try:
-                await asyncio.gather(
-                    handle_browser_messages(), handle_openai_messages()
+            if not oa_prompt_id:
+                logger.warning(
+                    f"No OpenAI Prompt configured for '{course_title}' course."
                 )
-            except websockets.exceptions.ConnectionClosed:
-                logger.info("One of the connections closed, cleaning up")
+                return
 
-        except Exception as e:
-            logger.error(f"Error handling connection: {str(e)}")
-            if not websocket.closed:
-                await websocket.close(1011, str(e))
-        finally:
-            if websocket in self.connections:
-                if openai_ws and not openai_ws.closed:
-                    await openai_ws.close(1000, "Normal closure")
-                del self.connections[websocket]
-            if websocket in self.message_queues:
-                del self.message_queues[websocket]
-            if not websocket.closed:
-                await websocket.close(1000, "Normal closure")
+            # create clean slate conversation for this URL
+            openai_conversations[client_url] = openai_client.conversations.create(
+                items=[
+                    # {
+                    #     "role": "system",
+                    #     "content": f"General instructions: {instructions}",
+                    # },
+                    {
+                        "role": "system",
+                        "content": f"You will deliver a classroom lecture specifically covering the topics in these notes: {lecture_notes}",
+                    },
+                ],
+                metadata={"client_url": f"{client_url}"},
+            )
+            # save conversation ID for later reference
+            oa_converstion_id = openai_conversations[client_url].id
 
-    async def serve(self):
-        """Start the WebSocket relay server."""
-        async with serve(
-            self.handle_browser_connection,
-            "0.0.0.0",
-            PORT,
-            ping_interval=20,
-            ping_timeout=20,
-            subprotocols=["realtime"],
-        ):
-            logger.info(f"WebSocket relay server started on ws://0.0.0.0:{PORT}")
-            await asyncio.Future()
+            logger.debug(
+                f"OpenAI Conversation #{oa_conversation_id} for URL {client_url}"
+            )
+
+            # send a handshake confirmation back to client
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "handshake",
+                        "data": {
+                            "message": "websocket handshake success",
+                            "server": SERVER_NAME,
+                            "course": course_title,
+                            "openai_prompt_id": oa_prompt_id,
+                        },
+                    }
+                )
+            )
+
+            # Ask openAI to generate first welcome message
+            try:
+                # try to get response from OpenAI API
+                openai_response = openai_client.responses.create(
+                    model=oa_config.get("model", OPENAI_DEFAULT_MODEL),
+                    prompt={
+                        "id": oa_config.get(
+                            "prompt_id", None
+                        ),  # get prompt ID from config
+                    },
+                    input=[
+                        {
+                            "role": "system",
+                            "content": "Give a summary of the lecture notes.",
+                        }
+                    ],
+                    conversation=oa_conversation_id,
+                    tools=[
+                        {
+                            "type": "file_search",
+                            "vector_store_ids": [
+                                oa_config.get("vector_store_id", None)
+                            ],
+                        }
+                    ],
+                    max_output_tokens=2048,
+                    store=True,
+                )
+
+                # extract the text from the response
+                openai_response = openai_response.output_text.strip()
+
+            except Exception as e:
+                logger.error(f"Error from OpenAI API: {e}")
+                openai_response = f"Sorry, I can't respond intelligently right now. Please see {course_title} admins for help."
+
+            # get first output response
+            logger.info(f"OpenAI response: {openai_response}")
+
+            # clean up the response by removing any 【source】 references
+            openai_response = re.sub(r"【.*?】", "", openai_response).strip()
 
 
-def main():
-    """Main entry point for the WebSocket relay server."""
-    relay = WebSocketRelay()
-    try:
-        asyncio.run(relay.serve())
-    except KeyboardInterrupt:
-        logger.info("Server shutdown requested")
-    finally:
-        logger.info("Server shutdown complete")
+async def main():
+    """
+    Start websocket server.
+    """
+    async with serve(handler, "", 8001) as server:
+        await server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

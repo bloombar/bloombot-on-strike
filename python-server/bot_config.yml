@@ -1,0 +1,23 @@
+server:
+  name: 'Knowledge Kitchen'
+  courses:
+    - title: 'Software Engineering'
+      file_prefix: 'se' # used to recognize any roster or other CSV files releated to this course
+      openai_assistant:
+        name: 'Bloombot (Software Engineering)'
+        id: 'asst_w1rnOluuQUZoBxBZAJjcLXKs' # created in the OpenAI "Playground"
+        prompt_id: 'pmpt_6977b4344a1c8196bbd4de834aaaed70051d9a22b178c19d' # Chat Prompts API
+        vector_store_id: 'vs_6977d1ddf0148191b0a320b9d9be1e69'
+        instructions: 'You are a personal assistant to Clinical Professor of Computer Science, Amos Bloomberg, at New York University teaching a Software Engineering course. Help answer questions about course material and the schedule and syllabus. Answer questions based on the information in the uploaded files.  Keep responses to 1 paragraph at most.'
+        tools: [] #[{ 'type': 'code_interpreter' }]
+        model: 'gpt-4.1'
+    - title: 'Agile Software Development & DevOps'
+      file_prefix: 'ad' # used to recognize any roster or other CSV files releated to this course
+      openai_assistant:
+        name: 'Bloombot (Agile Software Dev & DevOps)'
+        id: 'asst_ERFCwMxCyc2kFljY1NQ70ZtU' # created in the OpenAI "Playground"
+        prompt_id: 'pmpt_6977b30f868081938fcedd3a2f662b480cb807fae8a5c7b8' # Chat Prompts API
+        vector_store_id: 'vs_6977d2f688088191bfeb7112216f0379'
+        instructions: 'You are a personal assistant to Clinical Professor of Computer Science, Amos Bloomberg, at New York University teaching an Agile Software Development & DevOps course. Help answer questions about course material and the schedule and syllabus. Answer questions based on the information in the uploaded files.  Keep responses to 1 paragraph at most.'
+        tools: [] #[{ 'type': 'code_interpreter' }]
+        model: 'gpt-4.1'

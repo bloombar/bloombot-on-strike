@@ -1,94 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { RealtimeClient } from '@openai/realtime-api-beta'
-// @ts-expect-error - External library without type definitions
-import { WavRecorder, WavStreamPlayer } from './lib/wavtools/index.js'
-import { instructions } from './llm-config.js'
+import useWebSocket, { ReadyState } from 'react-use-websocket'
+// import { instructions } from './llm-config.js'
 import './App.css'
-
-const clientRef = { current: null as RealtimeClient | null }
-const wavRecorderRef = { current: null as WavRecorder | null }
-const wavStreamPlayerRef = { current: null as WavStreamPlayer | null }
 
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const slidesContentRef = useRef<string[]>([])
   const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
-  // console.log('COURSE_ORIGIN:', COURSE_ORIGIN)
-  let client: RealtimeClient | null = null
+  const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const slidesContentRef = useRef<string[]>([])
+  const [messageHistory, setMessageHistory] = useState<{}[]>([])
 
-  if (!clientRef.current) {
-    clientRef.current = new RealtimeClient({
-      url: RELAY_SERVER_URL || undefined,
-    })
-  }
-  if (!wavRecorderRef.current) {
-    wavRecorderRef.current = new WavRecorder({ sampleRate: 24000 })
-  }
-  if (!wavStreamPlayerRef.current) {
-    wavStreamPlayerRef.current = new WavStreamPlayer({ sampleRate: 24000 })
-  }
-  const isConnectedRef = useRef(false)
-  const connectConversation = useCallback(async () => {
-    if (isConnectedRef.current) return
-    isConnectedRef.current = true
-    setConnectionStatus('connecting')
-    client = clientRef.current
-    const wavRecorder = wavRecorderRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-    if (!client || !wavRecorder || !wavStreamPlayer) return
-
-    try {
-      // Connect to microphone
-      await wavRecorder.begin()
-
-      // Connect to audio output
-      await wavStreamPlayer.connect()
-
-      // Connect to realtime API
-      await client.connect()
-
-      setConnectionStatus('connected')
-
-      client.on('error', (event: any) => {
-        console.error(event)
-        setConnectionStatus('disconnected')
-      })
-
-      client.on('disconnected', () => {
-        setConnectionStatus('disconnected')
-      })
-
-      client.sendUserMessageContent([
-        {
-          type: `input_text`,
-          text: `Hello!`,
-        },
-      ])
-
-      // Always use VAD mode
-      client.updateSession({
-        turn_detection: { type: 'server_vad' },
-      })
-
-      // Check if we're already recording before trying to pause
-      if (wavRecorder.recording) {
-        await wavRecorder.pause()
-      }
-
-      // Check if we're already paused before trying to record
-      if (!wavRecorder.recording) {
-        await wavRecorder.record((data: { mono: Float32Array }) => client?.appendInputAudio(data.mono))
-      }
-    } catch (error) {
-      console.error('Connection error:', error)
-      setConnectionStatus('disconnected')
-    }
-  }, [])
-
+  // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
     ? 'Missing required "wss" parameter in URL'
     : (() => {
@@ -100,9 +25,42 @@ export function App() {
         }
       })()
 
-  const triggerRightArrow = () => {
-    const rightArrowKeyCode = 39
+  //open websocket connection to server
+  const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(RELAY_SERVER_URL, {
+    onOpen: () => {
+      console.log('client: websocket opened')
+      // send confirmation message to server on connection open
+      sendJsonMessage({
+        type: 'handshake',
+        data: {
+          client_url: COURSE_URL,
+          // instructions: instructions,
+          course_title: COURSE_TITLE,
+          lecture_notes: 'twas brilllig and the slithy toves did gyre and gimble in the wabe',
+        },
+      })
+    },
+    //Will attempt to reconnect on all close events, such as server shutting down
+    shouldReconnect: (closeEvent) => true,
+  })
 
+  // connectionStatus is human-readable version of readystate
+  const connectionStatus = {
+    [ReadyState.CONNECTING]: 'connecting',
+    [ReadyState.OPEN]: 'connected',
+    [ReadyState.CLOSING]: 'closing',
+    [ReadyState.CLOSED]: 'closed',
+    [ReadyState.UNINSTANTIATED]: 'uninstantiated',
+  }[readyState]
+
+  useEffect(() => {
+    if (lastJsonMessage !== null && lastJsonMessage !== undefined) {
+      setMessageHistory((prev) => prev.concat(lastJsonMessage))
+      console.log('client received message:', JSON.stringify(lastJsonMessage, null, 2))
+    }
+  }, [lastJsonMessage])
+
+  const gotoNextSlide = () => {
     const iframe = iframeRef.current
     if (!iframe) return
 
@@ -111,58 +69,12 @@ export function App() {
 
     iframeWindow.postMessage(
       {
-        type: 'keypress',
-        data: rightArrowKeyCode,
+        type: 'nextSlide',
+        data: null,
       },
       COURSE_ORIGIN,
     )
   }
-
-  /**
-   * Core RealtimeClient and audio capture setup
-   * Set all of our instructions, tools, events and more
-   */
-  useEffect(() => {
-    // Only run the effect if there's no error
-    if (!errorMessage) {
-      connectConversation()
-      const wavStreamPlayer = wavStreamPlayerRef.current
-      const client = clientRef.current
-      if (!client || !wavStreamPlayer) return
-
-      // Set instructions
-      client.updateSession({ instructions: instructions })
-
-      // handle realtime events from client + server for event logging
-      client.on('error', (event: any) => console.error(event))
-      client.on('conversation.interrupted', async () => {
-        console.log('Conversation interrupted.')
-        const trackSampleOffset = await wavStreamPlayer.interrupt()
-        if (trackSampleOffset?.trackId) {
-          const { trackId, offset } = trackSampleOffset
-          await client.cancelResponse(trackId, offset)
-        }
-      })
-      client.on('conversation.updated', async ({ item, delta }: any) => {
-        console.log('Conversation updated:', { item, delta })
-        client.conversation.getItems()
-        if (delta?.audio) {
-          console.log('Received audio delta. Playing response...')
-          wavStreamPlayer.add16BitPCM(delta.audio, item.id)
-        }
-        if (item.status === 'completed' && item.formatted.audio?.length) {
-          console.log('Conversation item completed with audio response. Decoding and playing response...')
-          const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000)
-          item.formatted.file = wavFile
-          triggerRightArrow()
-        }
-      })
-
-      return () => {
-        client.reset()
-      }
-    }
-  }, [errorMessage])
 
   useEffect(() => {
     // look out for responses to postMessages from a child window
@@ -201,21 +113,12 @@ export function App() {
         // console.log(`Received content response: ${data}`)
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
-
-        slidesContentRef.current.push(data)
-
-        clientRef.current?.sendUserMessageContent([
-          {
-            type: `input_text`,
-            text: `Explain the new concepts in this slide. Keep it short and fast for an educated audience. Do not mention that the text comes from a "slide". Add color and context to the concepts: ${slideDiff || data}`,
-          },
-        ])
       }
     })
   }, [])
 
   useEffect(() => {
-    triggerRightArrow()
+    gotoNextSlide()
   }, [COURSE_ORIGIN])
 
   return (

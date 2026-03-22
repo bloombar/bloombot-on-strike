@@ -7,6 +7,8 @@ name = "pypi"
 websockets = "*"
 python-dotenv = "*"
 requests = "*"
+openai = "*"
+pyyaml = "*"
 
 [dev-packages]
 
