@@ -11,6 +11,7 @@ export function App() {
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
   const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [iFrameLoaded, setIFrameLoaded] = useState(false)
   const slidesContentRef = useRef<string[]>([])
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
 
@@ -61,13 +62,21 @@ export function App() {
     }
   }, [lastJsonMessage])
 
-  const gotoNextSlide = () => {
+  const getIFrameWindow = (): Window => {
+    /**
+     * Get the contentWindow of the iframe, if it exists.
+     */
     const iframe = iframeRef.current
-    if (!iframe) return
+    if (!iframe) throw new Error('iFrame not found')
 
     const iframeWindow = iframe.contentWindow
-    if (!iframeWindow) return
+    if (!iframeWindow) throw new Error('iFrame contentWindow not found')
+    return iframeWindow
+  }
 
+  const goToNextSlide = () => {
+    console.log('Triggering next slide...')
+    const iframeWindow = getIFrameWindow()
     iframeWindow.postMessage(
       {
         type: 'nextSlide',
@@ -76,6 +85,18 @@ export function App() {
       COURSE_ORIGIN,
     )
   }
+
+  useEffect(() => {
+    // once iframe has loaded, get all slides content from textarea markdown source data
+    const iframeWindow = getIFrameWindow()
+    iframeWindow.postMessage(
+      {
+        type: 'getMarkdownSource',
+        data: null,
+      },
+      COURSE_ORIGIN,
+    )
+  }, [iFrameLoaded])
 
   useEffect(() => {
     // look out for responses to postMessages from a child window
