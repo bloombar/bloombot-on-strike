@@ -10,8 +10,9 @@ export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
   //const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
-  // const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/build-tools/'
+  // const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_URL =
+    params.get('url') || 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
   const [markdownSource, setMarkdownSource] = useState<string>('')
