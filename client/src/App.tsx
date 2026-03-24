@@ -1,20 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import useWebSocket, { ReadyState } from 'react-use-websocket'
-// import { instructions } from './llm-config.js'
+import { SessionInteractivityMode } from '@heygen/liveavatar-web-sdk'
+import { LiveAvatarSession } from './LiveAvatarSession'
 import './App.css'
+
+export type SessionMode = 'FULL' | 'FULL_PTT' | 'LITE'
 
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
-  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  //const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
   const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [iFrameLoaded, setIFrameLoaded] = useState(false)
   const slidesContentRef = useRef<string[]>([])
-  const slidesIntervalRef = useRef<number>(0)
+  const slidesTimeoutRef = useRef<number>(0)
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
+  const [awaitingTextToSpeak, setAwaitingTextToSpeak] = useState(false)
+  const [liveAvatarSessionToken, setLiveAvatarSessionToken] = useState('')
+  const [mode, setMode] = useState<SessionMode>('FULL')
 
   // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
@@ -27,6 +34,20 @@ export function App() {
           return 'Invalid URL format for "wss" parameter'
         }
       })()
+
+  const onSessionStopped = () => {
+    setLiveAvatarSessionToken('')
+    console.log('LiveAvatar session stopped')
+  }
+
+  const voiceChatConfig = useMemo(() => {
+    if (mode === 'FULL_PTT') {
+      return {
+        mode: SessionInteractivityMode.PUSH_TO_TALK,
+      }
+    }
+    return true
+  }, [mode])
 
   //open websocket connection to server
   const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(RELAY_SERVER_URL, {
@@ -48,6 +69,11 @@ export function App() {
         lecture_notes: markdownSource,
       },
     })
+    sendJsonMessage({
+      type: 'request_liveavatar_token',
+      data: null,
+    })
+    console.log('client requested liveavatar token')
   }, [markdownSource])
 
   // connectionStatus is human-readable version of readystate
@@ -60,9 +86,26 @@ export function App() {
   }[readyState]
 
   useEffect(() => {
+    /**
+     * Handle incoming messages from the server via websockets.
+     */
     if (lastJsonMessage !== null && lastJsonMessage !== undefined) {
       setMessageHistory((prev) => prev.concat(lastJsonMessage))
       console.log('client received message:', JSON.stringify(lastJsonMessage, null, 2))
+
+      const { type, data } = lastJsonMessage
+
+      if (lastJsonMessage.type === 'response_spoken_text') {
+        setAwaitingTextToSpeak(false) // mark we are no longer awaiting a response from the server for this slide
+        console.log(`Received text to speak for current slide: ${data?.response}`)
+        window.clearTimeout(slidesTimeoutRef.current) // cancel any previous timers
+        setTimeout(() => {
+          goToNextSlide() // transition to the next slide after a delay to give time for the text to be spoken
+        }, 5000) // adjust this delay as needed based on how long it takes to speak the text
+      } else if (lastJsonMessage.type === 'response_liveavatar_token') {
+        console.log(`Received LiveAvatar token: ${data?.token}`)
+        setLiveAvatarSessionToken(data?.token) // store the token in state to pass to the LiveAvatarSession component
+      }
     }
   }, [lastJsonMessage])
 
@@ -93,6 +136,17 @@ export function App() {
   useEffect(() => {
     // once iframe has loaded, get all slides content from textarea markdown source data
     const iframeWindow = getIFrameWindow()
+
+    // generate version of the slideshow with incremental slides removed
+    iframeWindow.postMessage(
+      {
+        type: 'removeIncrementalSlides',
+        data: null,
+      },
+      COURSE_ORIGIN,
+    )
+
+    // get the markdown source for all slides to pass to the LLM for processing
     iframeWindow.postMessage(
       {
         type: 'getMarkdownSource',
@@ -135,14 +189,16 @@ export function App() {
         )
 
         ///end
+      } else if (type === 'response:removeIncrementalSlides') {
+        console.log(`Incremental slides removed.`)
       } else if (type === 'response:getMarkdownSource') {
         console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
         setMarkdownSource(data)
         // start the show!
         console.log('Starting lecture...')
         // set new slide carousel timer
-        window.clearInterval(slidesIntervalRef.current) // cancel any previous timers
-        slidesIntervalRef.current = window.setInterval(
+        window.clearTimeout(slidesTimeoutRef.current) // cancel any previous timers
+        slidesTimeoutRef.current = window.setTimeout(
           () => {
             goToNextSlide()
           },
@@ -160,24 +216,43 @@ export function App() {
         )
       } else if (type === 'response:getContent') {
         // we have new slide content...
+        if (!data || data.trim() == '') return
         // get the difference between this slide and the previous
         const previousSlideContent = slidesContentRef.current[slidesContentRef.current.length - 1] ?? null
         const slideDiff = previousSlideContent ? data.replace(previousSlideContent, '').trim() : data
         if (!slideDiff) return
-        slidesContentRef.current.push(data)
+        slidesContentRef.current.push(data) // store latest slide content for future diffing
 
         // slide carousel has transitioned... get the text to speak about the new slide from the server
         sendJsonMessage({
           type: 'request_spoken_text',
           data: slideDiff,
         })
+        setAwaitingTextToSpeak(true) // mark we are awaiting a response from the server for this slide
       }
     })
   }, [iFrameLoaded])
 
   return (
     <div className="app-container">
-      <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />{' '}
+      <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />
+      <div className="avatar-container">
+        {liveAvatarSessionToken ? (
+          <LiveAvatarSession
+            mode={mode}
+            sessionAccessToken={liveAvatarSessionToken}
+            voiceChatConfig={voiceChatConfig}
+            onSessionStopped={onSessionStopped}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-lg font-medium text-white mb-2">Connecting to LiveAvatar...</h2>
+              <p className="text-sm text-gray-400">This may take a moment. Please wait.</p>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">

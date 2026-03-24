@@ -46,13 +46,15 @@ pipenv shell
 
 Note: You **must** add credits to your OpenAI account before running this demo. If your account has no credits, the demo will connect successfully, but the bot will not respond to anything you say in the meeting.
 
-#### Client cCnfiguration
+#### Client configuration
 
 In the `client` directory, copy the `.env.example` file and rename it to `.env`. Then modify the settings therein.
 
 #### Python Server Configuration
 
 In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `3000` if not specified.
+
+Update the `bot_config.yml` with details about your course(s). Include any OpenAI Responses API [Chat Prompts](https://developers.openai.com/api/docs/guides/prompting#create-a-prompt) that you have set up and [vector store files](https://developers.openai.com/api/reference/resources/vector_stores/subresources/files/methods/create) you have uploaded.
 
 ## Quickstart
 
@@ -73,7 +75,7 @@ Then in a separate terminal:
 ngrok http 3000
 ```
 
-2. Create a bot by sending the following curl request, replacing `YOUR_RECALL_TOKEN` and `YOUR_NGROK_URL` with your values:
+2. Create a bot by sending the following curl request, replacing `YOUR_RECALL_TOKEN`, `YOUR_NGROK_URL`, and other placeholders with your values:
 
 ```bash
 curl --request POST \
@@ -88,7 +90,7 @@ curl --request POST \
       "camera": {
         "kind": "webpage",
         "config": {
-          "url": "https://recallai-demo.netlify.app?wss=wss://YOUR_NGROK_URL"
+          "url": "https://recallai-demo.netlify.app?wss=wss://YOUR_NGROK_URL&course=YOUR_COURSE_TITLE"
         }
       }
     },
@@ -100,7 +102,7 @@ curl --request POST \
   }'
 ```
 
-This command has been automated in the `run.py` script, using settings in the `.env` file. Execute that alternatively:
+This command has been automated in the `run.py` script, using settings in the `.env` file. Take a look and update as necessary. Execute that:
 
 ```python
 python run.py
@@ -137,14 +139,14 @@ npm run build
 
 The built files will be in the `dist` directory, ready to be deployed to your hosting service.
 
-Once the frontend is deployed on a hosting service, update your bot configuration to use your custom webpage URL:
+Once the frontend is deployed on a hosting service, update your bot configuration to use your custom webpage URL and the course title that matches one of the courses in the `bot-config.yml`.
 
 ```json
 {
   "output_media": {
     "kind": "webpage",
     "config": {
-      "url": "https://your-custom-url.com?wss=wss://your-server.com"
+      "url": "https://your-custom-url.com?wss=wss://your-server.com&course=Software+Engineering"
     }
   }
 }

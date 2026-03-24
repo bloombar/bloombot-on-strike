@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from websockets.asyncio.server import serve
+from live_avatar_helpers import *
 
 import openai
 from openai import OpenAI
@@ -23,6 +24,7 @@ PORT = int(os.getenv("PORT", "3000"))
 CONFIG_FILE = Path("bot_config.yml").resolve()  # path to the configuration file
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # from .env file
 OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
+LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")  # from .env file
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY must be set in .env file")
@@ -30,6 +32,10 @@ if not OPENAI_API_KEY:
 # create OpenAI client
 openai_conversations = {}  # will hold separate threads keyed by client browser URL
 openai_client = OpenAI()
+
+# start HeyGen LiveAvatar session
+# liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY)
+# start_liveavatar_session(liveavatar_session["session_token"])
 
 # load the config data from file
 with open(CONFIG_FILE, encoding="utf-8", mode="r") as f:
@@ -159,6 +165,10 @@ async def handler(websocket):
         elif event["type"] == "request_spoken_text":
             data = event["data"]
 
+            # ensure data is present
+            if (not data) or data.strip() == "":
+                continue
+
             # get the conversation ID for this URL
             oa_conversation_id = openai_conversations[client_url].id
 
@@ -174,7 +184,7 @@ async def handler(websocket):
                     input=[
                         {
                             "role": "system",
-                            "content": f"Act like a professor and explain slide to students. Keep it under 2 sentences. Do not mention that the information is from a slide.: {data}",
+                            "content": f"Act like a professor and explain this slide to students. Keep it under 2 sentences. Do not mention that the information is from a slide. Give a brief general summary of any programming code in the text. Here is the slide contents: {data}",
                         }
                     ],
                     conversation=oa_conversation_id,
@@ -203,6 +213,25 @@ async def handler(websocket):
                         "type": "response_spoken_text",
                         "data": {
                             "response": openai_response,
+                        },
+                    }
+                )
+            )
+        elif event["type"] == "request_liveavatar_token":
+            # start a session and get a token from LiveAvatar API
+            liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY)
+            start_liveavatar_session(liveavatar_session["session_token"])
+            logger.info(
+                f"LiveAvatar session started: {liveavatar_session['session_token']}"
+            )
+
+            # send the response back to client
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "response_liveavatar_token",
+                        "data": {
+                            "token": liveavatar_session["session_token"],
                         },
                     }
                 )
