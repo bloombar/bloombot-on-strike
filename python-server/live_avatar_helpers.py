@@ -2,7 +2,9 @@ import json
 import requests
 
 
-def get_liveavatar_session(api_key=None):
+def get_liveavatar_session(
+    api_key=None, avatar_id=None, voice_id=None, context_id=None, sandbox_mode=True
+):
     """
     Get a session token from LiveAvatar API.
     """
@@ -14,13 +16,13 @@ def get_liveavatar_session(api_key=None):
     # body of request
     payload = {
         "mode": "FULL",
-        "avatar_id": "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a",
-        "is_sandbox": True,
+        "avatar_id": avatar_id,
+        "is_sandbox": sandbox_mode,
         "video_settings": {"quality": "very_high", "encoding": "VP8"},
         "max_session_duration": 0,
         "avatar_persona": {
-            "voice_id": "864a26b8-bfba-4435-9cc5-1dd593de5ca7",
-            "context_id": "ce85226d-1d53-48a8-9b56-efccce8c0f90",
+            "voice_id": voice_id,
+            "context_id": context_id,
             "language": "en",
         },
         "interactivity_type": "CONVERSATIONAL",

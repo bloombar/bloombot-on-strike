@@ -25,8 +25,17 @@ PORT = int(os.getenv("PORT", "8001"))
 CONFIG_FILE = Path("bot_config.yml").resolve()  # path to the configuration file
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # from .env file
 OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
-LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")  # from .env file
-
+LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")
+LIVEAVATAR_AVATAR_ID = os.getenv(
+    "LIVEAVATAR_AVATAR_ID", "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a"
+)
+LIVEAVATAR_VOICE_ID = os.getenv(
+    "LIVEAVATAR_VOICE_ID", "864a26b8-bfba-4435-9cc5-1dd593de5ca7"
+)
+LIVEAVATAR_CONTEXT_ID = os.getenv(
+    "LIVEAVATAR_CONTEXT_ID", "ce85226d-1d53-48a8-9b56-efccce8c0f90"
+)
+LIVEAVATAR_SANDBOX_MODE = os.getenv("LIVEAVATAR_SANDBOX_MODE", "true").lower() == "true"
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY must be set in .env file")
 
@@ -35,7 +44,7 @@ openai_conversations = {}  # will hold separate threads keyed by client browser 
 openai_client = OpenAI()
 
 # start HeyGen LiveAvatar session
-# liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY)
+# liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY, LIVEAVATAR_AVATAR_ID, LIVEAVATAR_VOICE_ID, LIVEAVATAR_CONTEXT_ID)
 # start_liveavatar_session(liveavatar_session["session_token"])
 
 # load the config data from file
@@ -221,7 +230,13 @@ async def handler(websocket):
                 )
             elif event["type"] == "request_liveavatar_token":
                 # get a session token from LiveAvatar API (client SDK will start the session)
-                liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY)
+                liveavatar_session = get_liveavatar_session(
+                    LIVEAVATAR_API_KEY,
+                    LIVEAVATAR_AVATAR_ID,
+                    LIVEAVATAR_VOICE_ID,
+                    LIVEAVATAR_CONTEXT_ID,
+                    LIVEAVATAR_SANDBOX_MODE,
+                )
                 logger.info(
                     f"LiveAvatar session token obtained: {liveavatar_session['session_token']}"
                 )

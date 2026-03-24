@@ -1,3 +1,4 @@
 {
-  "pylint.args": ["--disable=logging-fstring-interpolation"]
+  "pylint.args": ["--disable=logging-fstring-interpolation"],
+  "python.terminal.useEnvFile": true
 }
