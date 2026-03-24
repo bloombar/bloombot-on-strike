@@ -1,28 +1,32 @@
-import { useCallback } from "react";
-import { useLiveAvatarContext } from "./context";
+import { useCallback } from 'react'
+import { SessionState } from '@heygen/liveavatar-web-sdk'
+import { useLiveAvatarContext } from './context'
 
 export const useSession = () => {
-  const { sessionRef, sessionState, isStreamReady, connectionQuality } =
-    useLiveAvatarContext();
+  const { sessionRef, sessionState, isStreamReady, connectionQuality } = useLiveAvatarContext()
 
   const startSession = useCallback(async () => {
-    return await sessionRef.current.start();
-  }, [sessionRef]);
+    const liveState = sessionRef.current?.state ?? sessionState
+    if (liveState !== SessionState.INACTIVE && liveState !== SessionState.DISCONNECTED) {
+      return
+    }
+    return await sessionRef.current.start()
+  }, [sessionRef, sessionState])
 
   const stopSession = useCallback(async () => {
-    return await sessionRef.current.stop();
-  }, [sessionRef]);
+    return await sessionRef.current.stop()
+  }, [sessionRef])
 
   const keepAlive = useCallback(async () => {
-    return await sessionRef.current.keepAlive();
-  }, [sessionRef]);
+    return await sessionRef.current.keepAlive()
+  }, [sessionRef])
 
   const attachElement = useCallback(
     (element: HTMLMediaElement) => {
-      return sessionRef.current.attach(element);
+      return sessionRef.current.attach(element)
     },
     [sessionRef],
-  );
+  )
 
   return {
     sessionState,
@@ -32,5 +36,5 @@ export const useSession = () => {
     stopSession,
     keepAlive,
     attachElement,
-  };
-};
+  }
+}

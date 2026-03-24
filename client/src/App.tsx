@@ -21,7 +21,10 @@ export function App() {
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
   const [awaitingTextToSpeak, setAwaitingTextToSpeak] = useState(false)
   const [liveAvatarSessionToken, setLiveAvatarSessionToken] = useState('')
+  const [textToSpeak, setTextToSpeak] = useState('')
   const [mode, setMode] = useState<SessionMode>('FULL')
+  const lectureReadyRef = useRef(false)
+  const lectureStartedRef = useRef(false)
 
   // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
@@ -34,6 +37,19 @@ export function App() {
           return 'Invalid URL format for "wss" parameter'
         }
       })()
+
+  const onSpeakingDone = useCallback(() => {
+    if (!lectureStartedRef.current && lectureReadyRef.current) {
+      // welcome message finished — start the lecture by advancing to the first content slide
+      lectureStartedRef.current = true
+      console.log('Avatar welcome message finished, starting lecture...')
+      goToNextSlide()
+    } else if (lectureStartedRef.current) {
+      // subsequent slide narration finished — advance to next slide
+      console.log('Avatar finished speaking, advancing to next slide...')
+      goToNextSlide()
+    }
+  }, [])
 
   const onSessionStopped = () => {
     setLiveAvatarSessionToken('')
@@ -98,10 +114,9 @@ export function App() {
       if (lastJsonMessage.type === 'response_spoken_text') {
         setAwaitingTextToSpeak(false) // mark we are no longer awaiting a response from the server for this slide
         console.log(`Received text to speak for current slide: ${data?.response}`)
-        window.clearTimeout(slidesTimeoutRef.current) // cancel any previous timers
-        setTimeout(() => {
-          goToNextSlide() // transition to the next slide after a delay to give time for the text to be spoken
-        }, 5000) // adjust this delay as needed based on how long it takes to speak the text
+        if (data?.response) {
+          setTextToSpeak(data.response)
+        }
       } else if (lastJsonMessage.type === 'response_liveavatar_token') {
         console.log(`Received LiveAvatar token: ${data?.token}`)
         setLiveAvatarSessionToken(data?.token) // store the token in state to pass to the LiveAvatarSession component
@@ -194,16 +209,9 @@ export function App() {
       } else if (type === 'response:getMarkdownSource') {
         console.log(`All slide markdown source loaded. Total length: ${data.length} characters.`)
         setMarkdownSource(data)
-        // start the show!
-        console.log('Starting lecture...')
-        // set new slide carousel timer
-        window.clearTimeout(slidesTimeoutRef.current) // cancel any previous timers
-        slidesTimeoutRef.current = window.setTimeout(
-          () => {
-            goToNextSlide()
-          },
-          10000, // delay the first slide by 10 seconds to give the LLM time to process the instructions and markdown source
-        )
+        // mark lecture content as ready — first slide will advance once avatar welcome message finishes
+        lectureReadyRef.current = true
+        console.log('Lecture content ready, waiting for avatar welcome message to finish...')
       } else if (type === 'response:nextSlide') {
         // we have transitioned to a new slide... get its content
         const iframeWindow = getIFrameWindow()
@@ -236,23 +244,20 @@ export function App() {
   return (
     <div className="app-container">
       <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />
-      <div className="avatar-container">
-        {liveAvatarSessionToken ? (
+
+      {liveAvatarSessionToken && (
+        <div className="avatar-container">
           <LiveAvatarSession
             mode={mode}
             sessionAccessToken={liveAvatarSessionToken}
             voiceChatConfig={voiceChatConfig}
             onSessionStopped={onSessionStopped}
+            textToSpeak={textToSpeak}
+            onSpeakingDone={onSpeakingDone}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="text-center">
-              <h2 className="text-lg font-medium text-white mb-2">Connecting to LiveAvatar...</h2>
-              <p className="text-sm text-gray-400">This may take a moment. Please wait.</p>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
       <div className="status-indicator">
         <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
         <div className="status-text">

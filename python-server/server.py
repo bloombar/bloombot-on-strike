@@ -88,7 +88,7 @@ async def handler(websocket):
                     # },
                     {
                         "role": "system",
-                        "content": f'Today, you are a bot named "ScabBot" who is covering for Professor Amos Bloomberg. Prof. Bloomberg is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf to the class today.',
+                        "content": f'Today, you are a bot named "ScabBot" who is a scab covering for Professor Amos Bloomberg. Prof. Bloomberg is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf to the class today, showing how the situation can be handled through education automation.',
                     },
                 ],
                 metadata={"client_url": f"{client_url}"},
@@ -218,11 +218,10 @@ async def handler(websocket):
                 )
             )
         elif event["type"] == "request_liveavatar_token":
-            # start a session and get a token from LiveAvatar API
+            # get a session token from LiveAvatar API (client SDK will start the session)
             liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY)
-            start_liveavatar_session(liveavatar_session["session_token"])
             logger.info(
-                f"LiveAvatar session started: {liveavatar_session['session_token']}"
+                f"LiveAvatar session token obtained: {liveavatar_session['session_token']}"
             )
 
             # send the response back to client
