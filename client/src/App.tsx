@@ -6,6 +6,9 @@ import './App.css'
 
 export type SessionMode = 'FULL' | 'FULL_PTT' | 'LITE'
 
+/** Minimum milliseconds between LiveAvatar token requests */
+const RECONNECT_COOLDOWN_MS = 10_000
+
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
@@ -30,6 +33,8 @@ export function App() {
   const isReconnectingRef = useRef(false)
   const handshakeSentRef = useRef(false)
   const silenceTimeoutRef = useRef<number>(0)
+  const lastTokenRequestTimeRef = useRef<number>(0)
+  const tokenRequestPendingRef = useRef(false)
 
   // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
@@ -68,8 +73,23 @@ export function App() {
   }, [])
 
   const onSessionStopped = () => {
+    // skip if a token request is already in flight
+    if (tokenRequestPendingRef.current) {
+      console.log('LiveAvatar token request already pending, skipping duplicate')
+      return
+    }
+
+    // enforce cooldown between token requests
+    const elapsed = Date.now() - lastTokenRequestTimeRef.current
+    if (elapsed < RECONNECT_COOLDOWN_MS) {
+      console.log(`LiveAvatar reconnect cooldown active (${RECONNECT_COOLDOWN_MS - elapsed}ms remaining), skipping`)
+      return
+    }
+
     console.log('LiveAvatar session stopped, requesting new token to reconnect...')
     isReconnectingRef.current = true
+    tokenRequestPendingRef.current = true
+    lastTokenRequestTimeRef.current = Date.now()
     setLiveAvatarSessionToken('') // unmount old session
     sendJsonMessage({
       type: 'request_liveavatar_token',
@@ -112,6 +132,8 @@ export function App() {
     // only request a LiveAvatar token once per connection
     if (!handshakeSentRef.current) {
       handshakeSentRef.current = true
+      tokenRequestPendingRef.current = true
+      lastTokenRequestTimeRef.current = Date.now()
       sendJsonMessage({
         type: 'request_liveavatar_token',
         data: null,
@@ -148,6 +170,7 @@ export function App() {
         }
       } else if (lastJsonMessage.type === 'response_liveavatar_token') {
         console.log(`Received LiveAvatar token: ${data?.token}`)
+        tokenRequestPendingRef.current = false
         setLiveAvatarSessionToken(data?.token) // store the token in state to pass to the LiveAvatarSession component
       }
     }
