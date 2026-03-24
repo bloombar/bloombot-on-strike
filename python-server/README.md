@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ```
 OPENAI_API_KEY=your_api_key_here
-PORT=3000
+PORT=8001
 ```
 
 ## Running the Server
@@ -32,7 +32,7 @@ To start the server, run:
 python server.py
 ```
 
-The server will start on the specified port (default: 3000) and relay WebSocket connections between the client and OpenAI's realtime API.
+The server will start on the specified port (default: 8001) and relay WebSocket connections between the client and OpenAI's realtime API.
 
 ## Features
 

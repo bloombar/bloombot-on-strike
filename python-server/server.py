@@ -20,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-PORT = int(os.getenv("PORT", "3000"))
+PORT = int(os.getenv("PORT", "8001"))
 CONFIG_FILE = Path("bot_config.yml").resolve()  # path to the configuration file
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # from .env file
 OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
@@ -241,7 +241,7 @@ async def main():
     """
     Start websocket server.
     """
-    async with serve(handler, "", 8001) as server:
+    async with serve(handler, "", PORT) as server:
         await server.serve_forever()
 
 

@@ -52,7 +52,7 @@ In the `client` directory, copy the `.env.example` file and rename it to `.env`.
 
 #### Python Server Configuration
 
-In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `3000` if not specified.
+In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `8001` if not specified.
 
 Update the `bot_config.yml` with details about your course(s). Include any OpenAI Responses API [Chat Prompts](https://developers.openai.com/api/docs/guides/prompting#create-a-prompt) that you have set up and [vector store files](https://developers.openai.com/api/reference/resources/vector_stores/subresources/files/methods/create) you have uploaded.
 
@@ -72,7 +72,7 @@ python server.py
 Then in a separate terminal:
 
 ```bash
-ngrok http 3000
+ngrok http 8001
 ```
 
 2. Create a bot by sending the following curl request, replacing `YOUR_RECALL_TOKEN`, `YOUR_NGROK_URL`, and other placeholders with your values:

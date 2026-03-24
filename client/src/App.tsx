@@ -10,8 +10,8 @@ export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
   //const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  //const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/build-tools/'
+  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  // const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/build-tools/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
   const [markdownSource, setMarkdownSource] = useState<string>('')
@@ -271,16 +271,19 @@ export function App() {
       <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />
 
       {liveAvatarSessionToken && (
-        <div className="avatar-container">
-          <LiveAvatarSession
-            mode={mode}
-            sessionAccessToken={liveAvatarSessionToken}
-            voiceChatConfig={voiceChatConfig}
-            onSessionStopped={onSessionStopped}
-            textToSpeak={textToSpeak}
-            onSpeakingDone={onSpeakingDone}
-            isReconnect={isReconnectingRef.current}
-          />
+        <div className="avatar-wrapper">
+          <div className="avatar-container">
+            <LiveAvatarSession
+              mode={mode}
+              sessionAccessToken={liveAvatarSessionToken}
+              voiceChatConfig={voiceChatConfig}
+              onSessionStopped={onSessionStopped}
+              textToSpeak={textToSpeak}
+              onSpeakingDone={onSpeakingDone}
+              isReconnect={isReconnectingRef.current}
+            />
+          </div>
+          <div className="avatar-name">ScabBot</div>
         </div>
       )}
 
