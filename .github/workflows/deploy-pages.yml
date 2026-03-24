@@ -3,7 +3,7 @@ name: Build and Deploy Client to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - heygen-avatar
   workflow_dispatch:
 
 permissions:
