@@ -186,7 +186,7 @@ async def handler(websocket):
                         input=[
                             {
                                 "role": "system",
-                                "content": f"Act like a professor and explain this slide to students. Keep it under 2 sentences. Do not mention that the information is from a slide. Here is the slide contents: {data}",
+                                "content": f"Act like a professor and explain this slide to students. Keep it under 2 sentences. Do not mention that the information is from a slide. Do not mention any user. Here is the slide contents: {data}",
                             }
                         ],
                         conversation=oa_conversation_id,
