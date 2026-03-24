@@ -10,7 +10,8 @@ export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
   //const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
-  const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  //const COURSE_URL = 'http://127.0.0.1:4000/content/courses/software-engineering/slides/continuous-integration/'
+  const COURSE_URL = 'https://knowledge.kitchen/content/courses/software-engineering/slides/build-tools/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
   const [markdownSource, setMarkdownSource] = useState<string>('')
@@ -25,6 +26,9 @@ export function App() {
   const [mode, setMode] = useState<SessionMode>('FULL')
   const lectureReadyRef = useRef(false)
   const lectureStartedRef = useRef(false)
+  const isReconnectingRef = useRef(false)
+  const handshakeSentRef = useRef(false)
+  const silenceTimeoutRef = useRef<number>(0)
 
   // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
@@ -39,7 +43,12 @@ export function App() {
       })()
 
   const onSpeakingDone = useCallback(() => {
-    if (!lectureStartedRef.current && lectureReadyRef.current) {
+    if (isReconnectingRef.current) {
+      // reconnect recovery: welcome message finished, resume was already triggered
+      isReconnectingRef.current = false
+      console.log('Avatar reconnected and finished re-speaking interrupted text, advancing...')
+      goToNextSlide()
+    } else if (!lectureStartedRef.current && lectureReadyRef.current) {
       // welcome message finished — start the lecture by advancing to the first content slide
       lectureStartedRef.current = true
       console.log('Avatar welcome message finished, starting lecture...')
@@ -49,11 +58,22 @@ export function App() {
       console.log('Avatar finished speaking, advancing to next slide...')
       goToNextSlide()
     }
+    // start silence timeout — if no new speech within 10s, advance
+    window.clearTimeout(silenceTimeoutRef.current)
+    silenceTimeoutRef.current = window.setTimeout(() => {
+      console.log('10s silence timeout — advancing to next slide...')
+      goToNextSlide()
+    }, 10000)
   }, [])
 
   const onSessionStopped = () => {
-    setLiveAvatarSessionToken('')
-    console.log('LiveAvatar session stopped')
+    console.log('LiveAvatar session stopped, requesting new token to reconnect...')
+    isReconnectingRef.current = true
+    setLiveAvatarSessionToken('') // unmount old session
+    sendJsonMessage({
+      type: 'request_liveavatar_token',
+      data: null,
+    })
   }
 
   const voiceChatConfig = useMemo(() => {
@@ -85,11 +105,15 @@ export function App() {
         lecture_notes: markdownSource,
       },
     })
-    sendJsonMessage({
-      type: 'request_liveavatar_token',
-      data: null,
-    })
-    console.log('client requested liveavatar token')
+    // only request a LiveAvatar token once per connection
+    if (!handshakeSentRef.current) {
+      handshakeSentRef.current = true
+      sendJsonMessage({
+        type: 'request_liveavatar_token',
+        data: null,
+      })
+      console.log('client requested liveavatar token')
+    }
   }, [markdownSource])
 
   // connectionStatus is human-readable version of readystate
@@ -115,6 +139,7 @@ export function App() {
         setAwaitingTextToSpeak(false) // mark we are no longer awaiting a response from the server for this slide
         console.log(`Received text to speak for current slide: ${data?.response}`)
         if (data?.response) {
+          window.clearTimeout(silenceTimeoutRef.current) // cancel silence timeout — avatar will speak
           setTextToSpeak(data.response)
         }
       } else if (lastJsonMessage.type === 'response_liveavatar_token') {
@@ -254,6 +279,7 @@ export function App() {
             onSessionStopped={onSessionStopped}
             textToSpeak={textToSpeak}
             onSpeakingDone={onSpeakingDone}
+            isReconnect={isReconnectingRef.current}
           />
         </div>
       )}

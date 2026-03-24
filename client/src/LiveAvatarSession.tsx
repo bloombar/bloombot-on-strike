@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LiveAvatarContextProvider, useSession, useTextChat, useVoiceChat, useChatHistory } from './liveavatar'
 import { SessionState, VoiceChatConfig } from '@heygen/liveavatar-web-sdk'
 import { useAvatarActions } from './liveavatar/useAvatarActions'
@@ -43,7 +43,8 @@ const LiveAvatarSessionComponent: React.FC<{
   onSessionStopped: () => void
   textToSpeak?: string
   onSpeakingDone?: () => void
-}> = ({ mode, onSessionStopped, textToSpeak, onSpeakingDone }) => {
+  isReconnect?: boolean
+}> = ({ mode, onSessionStopped, textToSpeak, onSpeakingDone, isReconnect }) => {
   const [message, setMessage] = useState('')
   const { sessionState, isStreamReady, startSession, stopSession, connectionQuality, keepAlive, attachElement } =
     useSession()
@@ -103,13 +104,25 @@ const LiveAvatarSessionComponent: React.FC<{
     }
   }, [attachElement, isStreamReady])
 
+  const triggerRecovery = useCallback(() => {
+    if (hasConnectedRef.current) {
+      hasConnectedRef.current = false
+      console.log('Session not connected, triggering recovery...')
+      onSessionStopped()
+    }
+  }, [onSessionStopped])
+
   useEffect(() => {
     if (!isStreamReady) return
-    const interval = setInterval(() => {
-      keepAlive()
+    const interval = setInterval(async () => {
+      try {
+        await keepAlive()
+      } catch {
+        triggerRecovery()
+      }
     }, 30000)
     return () => clearInterval(interval)
-  }, [isStreamReady, keepAlive])
+  }, [isStreamReady, keepAlive, triggerRecovery])
 
   useEffect(() => {
     if (sessionState === SessionState.INACTIVE) {
@@ -117,11 +130,30 @@ const LiveAvatarSessionComponent: React.FC<{
     }
   }, [startSession, sessionState])
 
+  const lastSpokenRef = useRef('')
+  const welcomeHandledRef = useRef(isReconnect ? true : false)
   useEffect(() => {
-    if (textToSpeak && isStreamReady) {
-      repeat(textToSpeak)
+    if (textToSpeak && isStreamReady && textToSpeak !== lastSpokenRef.current) {
+      lastSpokenRef.current = textToSpeak
+      try {
+        repeat(textToSpeak)
+      } catch {
+        triggerRecovery()
+      }
     }
-  }, [textToSpeak, isStreamReady, repeat])
+  }, [textToSpeak, isStreamReady, repeat, triggerRecovery])
+
+  // On reconnect, re-speak the current textToSpeak once the stream is ready
+  useEffect(() => {
+    if (isReconnect && isStreamReady && textToSpeak) {
+      lastSpokenRef.current = textToSpeak
+      try {
+        repeat(textToSpeak)
+      } catch {
+        triggerRecovery()
+      }
+    }
+  }, [isReconnect, isStreamReady, triggerRecovery])
 
   const wasTalkingRef = useRef(false)
   useEffect(() => {
@@ -129,9 +161,17 @@ const LiveAvatarSessionComponent: React.FC<{
       wasTalkingRef.current = true
     } else if (wasTalkingRef.current) {
       wasTalkingRef.current = false
+      if (!welcomeHandledRef.current) {
+        // This is the welcome message finishing — skip calling onSpeakingDone on reconnect
+        welcomeHandledRef.current = true
+        if (!isReconnect) {
+          onSpeakingDone?.()
+        }
+        return
+      }
       onSpeakingDone?.()
     }
-  }, [isAvatarTalking, onSpeakingDone])
+  }, [isAvatarTalking, onSpeakingDone, isReconnect])
 
   const qualityColor =
     connectionQuality === 'GOOD' ? 'text-green-400' : connectionQuality === 'BAD' ? 'text-red-400' : 'text-gray-500'
@@ -146,7 +186,16 @@ export const LiveAvatarSession: React.FC<{
   voiceChatConfig?: boolean | VoiceChatConfig
   textToSpeak?: string
   onSpeakingDone?: () => void
-}> = ({ mode, sessionAccessToken, onSessionStopped, voiceChatConfig = true, textToSpeak, onSpeakingDone }) => {
+  isReconnect?: boolean
+}> = ({
+  mode,
+  sessionAccessToken,
+  onSessionStopped,
+  voiceChatConfig = true,
+  textToSpeak,
+  onSpeakingDone,
+  isReconnect,
+}) => {
   return (
     <LiveAvatarContextProvider sessionAccessToken={sessionAccessToken} voiceChatConfig={voiceChatConfig}>
       <LiveAvatarSessionComponent
@@ -154,6 +203,7 @@ export const LiveAvatarSession: React.FC<{
         onSessionStopped={onSessionStopped}
         textToSpeak={textToSpeak}
         onSpeakingDone={onSpeakingDone}
+        isReconnect={isReconnect}
       />
     </LiveAvatarContextProvider>
   )
