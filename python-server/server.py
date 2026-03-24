@@ -79,11 +79,7 @@ async def handler(websocket):
                     logger.warning(
                         f"No OpenAI Prompt configured for '{course_title}' course."
                     )
-                    return
-
-                # create clean slate conversation for this URL
-                openai_conversations[client_url] = openai_client.conversations.create(
-                    items=[
+                continue
                         # {
                         #     "role": "system",
                         #     "content": f"General instructions: {instructions}",

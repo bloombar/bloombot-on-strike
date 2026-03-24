@@ -95,6 +95,9 @@ export function App() {
   })
 
   useEffect(() => {
+    // wait until we actually have lecture content before handshaking
+    if (!markdownSource) return
+
     // send confirmation message to server once we have the lecture content
     sendJsonMessage({
       type: 'handshake',
