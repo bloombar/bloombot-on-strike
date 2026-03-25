@@ -4,39 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LiveAvatarContextProvider, useSession, useTextChat, useVoiceChat, useChatHistory } from './liveavatar'
 import { SessionState, VoiceChatConfig } from '@heygen/liveavatar-web-sdk'
 import { useAvatarActions } from './liveavatar/useAvatarActions'
-import { SessionMode } from './LiveAvatarDemo'
-
-const StatusDot: React.FC<{ active: boolean; label: string }> = ({ active, label }) => (
-  <div className="flex items-center gap-1.5 text-xs text-gray-400">
-    <div className={`w-2 h-2 rounded-full ${active ? 'bg-green-400' : 'bg-gray-600'}`} />
-    {label}
-  </div>
-)
-
-const ActionButton: React.FC<{
-  onClick: () => void
-  disabled?: boolean
-  variant?: 'primary' | 'secondary' | 'danger'
-  size?: 'sm' | 'md'
-  children: React.ReactNode
-}> = ({ onClick, disabled, variant = 'secondary', size = 'md', children }) => {
-  const base = 'font-medium rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-  const sizes = {
-    sm: 'px-4 py-2 text-sm',
-    md: 'px-5 py-2.5 text-sm',
-  }
-  const variants = {
-    primary: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-    secondary: 'bg-white/10 text-white border border-white/10 hover:bg-white/15 active:bg-white/20',
-    danger: 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30',
-  }
-
-  return (
-    <button onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]}`}>
-      {children}
-    </button>
-  )
-}
+import { SessionMode } from './App'
 
 const LiveAvatarSessionComponent: React.FC<{
   mode: SessionMode

@@ -10,7 +10,6 @@ import {
   VoiceChatConfig,
 } from '@heygen/liveavatar-web-sdk'
 import { LiveAvatarSessionMessage, MessageSender } from './types'
-import { API_URL } from '../api/secrets'
 
 type LiveAvatarContextProps = {
   sessionRef: React.RefObject<LiveAvatarSession>
@@ -141,36 +140,6 @@ const useChatHistoryState = (sessionRef: React.RefObject<LiveAvatarSession>) => 
     const session = sessionRef.current
     if (!session) return
 
-    // User chunks are cumulative (full phrase so far) — replace
-    const handleUserChunk = (event: { text: string }) => {
-      const sender = MessageSender.USER
-      if (currentSenderRef.current === sender) {
-        setMessages((prev) => {
-          const last = prev[prev.length - 1]
-          if (!last) return prev
-          return [...prev.slice(0, -1), { ...last, message: event.text }]
-        })
-      } else {
-        currentSenderRef.current = sender
-        setMessages((prev) => [...prev, { sender, message: event.text, timestamp: Date.now() }])
-      }
-    }
-
-    // Avatar chunks are individual words — append
-    const handleAvatarChunk = (event: { text: string }) => {
-      const sender = MessageSender.AVATAR
-      if (currentSenderRef.current === sender) {
-        setMessages((prev) => {
-          const last = prev[prev.length - 1]
-          if (!last) return prev
-          return [...prev.slice(0, -1), { ...last, message: last.message + event.text }]
-        })
-      } else {
-        currentSenderRef.current = sender
-        setMessages((prev) => [...prev, { sender, message: event.text, timestamp: Date.now() }])
-      }
-    }
-
     const handleUserFinal = (event: { text: string }) => {
       currentSenderRef.current = null
       setMessages((prev) => {
@@ -207,14 +176,10 @@ const useChatHistoryState = (sessionRef: React.RefObject<LiveAvatarSession>) => 
       })
     }
 
-    session.on(AgentEventsEnum.USER_TRANSCRIPTION_CHUNK, handleUserChunk)
-    session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION_CHUNK, handleAvatarChunk)
     session.on(AgentEventsEnum.USER_TRANSCRIPTION, handleUserFinal)
     session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, handleAvatarFinal)
 
     return () => {
-      session.off(AgentEventsEnum.USER_TRANSCRIPTION_CHUNK, handleUserChunk)
-      session.off(AgentEventsEnum.AVATAR_TRANSCRIPTION_CHUNK, handleAvatarChunk)
       session.off(AgentEventsEnum.USER_TRANSCRIPTION, handleUserFinal)
       session.off(AgentEventsEnum.AVATAR_TRANSCRIPTION, handleAvatarFinal)
     }
@@ -231,7 +196,7 @@ export const LiveAvatarContextProvider = ({
   // Default voice chat on
   const config = {
     voiceChat: voiceChatConfig,
-    apiUrl: API_URL,
+    apiUrl: import.meta.env.VITE_LIVEAVATAR_API_URL,
   }
   const sessionRef = useRef<LiveAvatarSession>(new LiveAvatarSession(sessionAccessToken, config))
 

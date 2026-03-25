@@ -257,20 +257,28 @@ async def handler(websocket):
         logger.info("Client disconnected unexpectedly")
 
 
+MODE = os.getenv("MODE", "development").lower()
+
+
 async def main():
     """
     Start websocket server.
     """
-    # Set up SSL context
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ssl_context.load_cert_chain(
-        certfile="/etc/letsencrypt/live/seriousdata.org/fullchain.pem",
-        keyfile="/etc/letsencrypt/live/seriousdata.org/privkey.pem",
-    )
-
-    async with serve(handler, "", PORT, ssl=ssl_context) as server:
-        print(f"WSS server running on wss://seriousdata.org:{PORT}")
-        await server.serve_forever()
+    if MODE == "production":
+        # Set up SSL context for wss://
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(
+            certfile="/etc/letsencrypt/live/seriousdata.org/fullchain.pem",
+            keyfile="/etc/letsencrypt/live/seriousdata.org/privkey.pem",
+        )
+        async with serve(handler, "", PORT, ssl=ssl_context) as server:
+            print(f"WSS server running on wss://seriousdata.org:{PORT}")
+            await server.serve_forever()
+    else:
+        # Development mode — no SSL
+        async with serve(handler, "", PORT) as server:
+            print(f"WS server running on ws://localhost:{PORT}")
+            await server.serve_forever()
 
 
 if __name__ == "__main__":
