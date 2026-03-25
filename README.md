@@ -1,15 +1,18 @@
 # Bloombot-on-Strike (a.k.a ScabBot)
 
-This application is specifically designed to replace a university faculty member who is on strike. In other words, it is a ScabBot. It uses AI and code spit to automatically deliver lectures on Zoom in an equally- or more-compelling fashion.
-
-The software uses Recall.ai's [Output Media](https://docs.recall.ai/docs/stream-media) feature and OpenAI's [real-time API](https://platform.openai.com/docs/guides/realtime) to add an interactive voice agent to meetings.
+This application is specifically designed to replace a university faculty member [who is on strike](https://www.nyu.edu/about/news-publications/news/2026/march/statement-on-cfu-uaw-strike.html). In other words, it is a **ScabBot**. It uses AI and code spit to automatically deliver lectures on Zoom in an equally- or more-compelling fashion than a typical lecturer.
 
 ## Prerequisites
 
+Basic operation requires:
+
 1. [Python 3.8+](https://www.python.org/downloads/)
-1. [Ngrok](https://ngrok.com/docs/getting-started/)
+1. [HeyGen LiveAvatar API Key](https://www.liveavatar.com/) for avatar generation
+1. [OpenAI API Key](https://platform.openai.com/docs/overview) for spoken text generation
+
+Integration into Zoom calls requires additionally:
+
 1. [Recall.ai API Key](https://www.recall.ai/)
-1. [OpenAI API Key](https://platform.openai.com/docs/overview)
 
 ## Installation
 
@@ -34,6 +37,8 @@ The server implementation is available in Python.
 
 ##### Python Implementation
 
+Assuming [pipenv](https://pipenv.pypa.io/en/latest/installation.html) is installed...
+
 ```bash
 cd ../python-server
 pipenv install
@@ -52,13 +57,11 @@ In the `client` directory, copy the `.env.example` file and rename it to `.env`.
 
 #### Python Server Configuration
 
-In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your OpenAI API key. The PORT is optional and defaults to `8001` if not specified.
+In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your keys. The PORT is optional and defaults to `8001` if not specified.
 
-Update the `bot_config.yml` with details about your course(s). Include any OpenAI Responses API [Chat Prompts](https://developers.openai.com/api/docs/guides/prompting#create-a-prompt) that you have set up and [vector store files](https://developers.openai.com/api/reference/resources/vector_stores/subresources/files/methods/create) you have uploaded.
+Update the `bot-config.yml` with details about your course(s). Include any OpenAI Responses API [Chat Prompts](https://developers.openai.com/api/docs/guides/prompting#create-a-prompt) that you have set up and [vector store files](https://developers.openai.com/api/reference/resources/vector_stores/subresources/files/methods/create) you have uploaded.
 
 ## Quickstart
-
-If you want to quickly test the functionality of this application, you don't need to host the frontend yourself. You can use Recall AI's pre-hosted demo frontend at [https://recallai-demo.netlify.app](https://recallai-demo.netlify.app). However, you will still need to provide your OpenAI API key and ngrok URL.
 
 1. Start your backend server and expose it using ngrok:
 
@@ -66,16 +69,32 @@ Python:
 
 ```bash
 cd python-server
-python server.py
+pipenv shell
+python ./server.py
 ```
 
-Then in a separate terminal:
+Then in a separate terminal, use `ngrok` to create a public URL that tunnels to your local server:
 
 ```bash
 ngrok http 8001
 ```
 
-2. Create a bot by sending the following curl request, replacing `YOUR_RECALL_TOKEN`, `YOUR_NGROK_URL`, and other placeholders with your values:
+2. Start your front-end development web server using `vite`:
+
+```bash
+cd client
+npm run dev
+```
+
+This will output the URL of your local web server, e.g. `http://localhost:5173`.
+
+3. Load this client URL in web browser with the parameters it needs, including `wss` that shows where to find the server (using the ngrok URL or raw localhost server URL), the `course` title of the course that matches one of your courses listed in your `bot_config.yml`, and the `url` of a slide deck you'd like the bot to present on your behalf (defaults to example slide deck we have created).
+
+http://localhost:5173/?wss=ws://localhost:8001&course=Software+Engineering
+
+## Attach to Zoom call
+
+1. Add the bot to a Zoom acll by sending the following curl request, replacing `YOUR_RECALL_TOKEN`, `YOUR_NGROK_SERVER_URL`, and other placeholders with your values:
 
 ```bash
 curl --request POST \
@@ -90,7 +109,7 @@ curl --request POST \
       "camera": {
         "kind": "webpage",
         "config": {
-          "url": "https://recallai-demo.netlify.app?wss=wss://YOUR_NGROK_URL&course=YOUR_COURSE_TITLE"
+          "url": "https://recallai-demo.netlify.app?wss=wss://YOUR_NGROK_SERVER_URL&course=YOUR_COURSE_TITLE"
         }
       }
     },
@@ -120,14 +139,11 @@ Navigate to the client directory and start the development server:
 
 ```bash
 cd client
+npm install
 npm run dev
 ```
 
 The client will be available at `http://localhost:5173`.
-
-### Modifying the Agent
-
-You can modify the initial prompt of the agent by editing the `llm_config.ts` file.
 
 ### Building for Production
 
