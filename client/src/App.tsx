@@ -72,7 +72,25 @@ export function App() {
     }, 10000)
   }, [])
 
-  const onSessionStopped = () => {
+  const voiceChatConfig = useMemo(() => {
+    if (mode === 'FULL_PTT') {
+      return {
+        mode: SessionInteractivityMode.PUSH_TO_TALK,
+      }
+    }
+    return true
+  }, [mode])
+
+  //open websocket connection to server
+  const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(RELAY_SERVER_URL, {
+    onOpen: () => {
+      console.log('client: websocket opened')
+    },
+    //Will attempt to reconnect on all close events, such as server shutting down
+    shouldReconnect: (closeEvent) => true,
+  })
+
+  const onSessionStopped = useCallback(() => {
     // skip if a token request is already in flight
     if (tokenRequestPendingRef.current) {
       console.log('LiveAvatar token request already pending, skipping duplicate')
@@ -95,25 +113,7 @@ export function App() {
       type: 'request_liveavatar_token',
       data: null,
     })
-  }
-
-  const voiceChatConfig = useMemo(() => {
-    if (mode === 'FULL_PTT') {
-      return {
-        mode: SessionInteractivityMode.PUSH_TO_TALK,
-      }
-    }
-    return true
-  }, [mode])
-
-  //open websocket connection to server
-  const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(RELAY_SERVER_URL, {
-    onOpen: () => {
-      console.log('client: websocket opened')
-    },
-    //Will attempt to reconnect on all close events, such as server shutting down
-    shouldReconnect: (closeEvent) => true,
-  })
+  }, [sendJsonMessage])
 
   useEffect(() => {
     // wait until we actually have lecture content before handshaking

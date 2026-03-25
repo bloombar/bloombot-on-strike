@@ -73,12 +73,30 @@ const LiveAvatarSessionComponent: React.FC<{
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [videoHeight, setVideoHeight] = useState<number>(0)
   const hasConnectedRef = useRef(false)
+  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (sessionState !== SessionState.DISCONNECTED) {
       hasConnectedRef.current = true
-    } else if (hasConnectedRef.current) {
-      onSessionStopped()
+      // Session recovered — cancel any pending disconnect
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current)
+        disconnectTimerRef.current = null
+        console.log('Session recovered from transient disconnect')
+      }
+    } else if (hasConnectedRef.current && !disconnectTimerRef.current) {
+      // Debounce: wait 5s before treating DISCONNECTED as terminal
+      console.log('Session disconnected, waiting 5s before recovery...')
+      disconnectTimerRef.current = setTimeout(() => {
+        disconnectTimerRef.current = null
+        onSessionStopped()
+      }, 5000)
+    }
+    return () => {
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current)
+        disconnectTimerRef.current = null
+      }
     }
   }, [sessionState, onSessionStopped])
 
@@ -104,25 +122,17 @@ const LiveAvatarSessionComponent: React.FC<{
     }
   }, [attachElement, isStreamReady])
 
-  const triggerRecovery = useCallback(() => {
-    if (hasConnectedRef.current) {
-      hasConnectedRef.current = false
-      console.log('Session not connected, triggering recovery...')
-      onSessionStopped()
-    }
-  }, [onSessionStopped])
-
   useEffect(() => {
     if (!isStreamReady) return
     const interval = setInterval(async () => {
       try {
         await keepAlive()
-      } catch {
-        triggerRecovery()
+      } catch (e) {
+        console.warn('keepAlive failed, waiting for SDK disconnect event:', e)
       }
-    }, 30000)
+    }, 15000)
     return () => clearInterval(interval)
-  }, [isStreamReady, keepAlive, triggerRecovery])
+  }, [isStreamReady, keepAlive])
 
   useEffect(() => {
     if (sessionState === SessionState.INACTIVE) {
@@ -135,25 +145,31 @@ const LiveAvatarSessionComponent: React.FC<{
   useEffect(() => {
     if (textToSpeak && isStreamReady && textToSpeak !== lastSpokenRef.current) {
       lastSpokenRef.current = textToSpeak
-      try {
-        repeat(textToSpeak)
-      } catch {
-        triggerRecovery()
+      const doRepeat = async () => {
+        try {
+          await repeat(textToSpeak)
+        } catch (e) {
+          console.warn('repeat() failed, waiting for SDK disconnect event:', e)
+        }
       }
+      doRepeat()
     }
-  }, [textToSpeak, isStreamReady, repeat, triggerRecovery])
+  }, [textToSpeak, isStreamReady, repeat])
 
   // On reconnect, re-speak the current textToSpeak once the stream is ready
   useEffect(() => {
     if (isReconnect && isStreamReady && textToSpeak) {
       lastSpokenRef.current = textToSpeak
-      try {
-        repeat(textToSpeak)
-      } catch {
-        triggerRecovery()
+      const doRepeat = async () => {
+        try {
+          await repeat(textToSpeak)
+        } catch (e) {
+          console.warn('reconnect repeat() failed, waiting for SDK disconnect event:', e)
+        }
       }
+      doRepeat()
     }
-  }, [isReconnect, isStreamReady, triggerRecovery])
+  }, [isReconnect, isStreamReady, repeat])
 
   const wasTalkingRef = useRef(false)
   useEffect(() => {

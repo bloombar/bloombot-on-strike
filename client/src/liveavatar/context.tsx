@@ -57,18 +57,31 @@ const useSessionState = (sessionRef: React.RefObject<LiveAvatarSession>) => {
 
   useEffect(() => {
     if (sessionRef.current) {
+      let teardownTimer: ReturnType<typeof setTimeout> | null = null
       sessionRef.current.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
         setSessionState(state)
         if (state === SessionState.DISCONNECTED) {
-          sessionRef.current.removeAllListeners()
-          sessionRef.current.voiceChat.removeAllListeners()
-          setIsStreamReady(false)
+          // Delay listener teardown so transient WebRTC blips can recover
+          teardownTimer = setTimeout(() => {
+            if (sessionRef.current) {
+              sessionRef.current.removeAllListeners()
+              sessionRef.current.voiceChat.removeAllListeners()
+            }
+            setIsStreamReady(false)
+          }, 3000)
+        } else if (teardownTimer) {
+          // Session recovered — cancel the teardown
+          clearTimeout(teardownTimer)
+          teardownTimer = null
         }
       })
       sessionRef.current.on(SessionEvent.SESSION_STREAM_READY, () => {
         setIsStreamReady(true)
       })
       sessionRef.current.on(SessionEvent.SESSION_CONNECTION_QUALITY_CHANGED, setConnectionQuality)
+      return () => {
+        if (teardownTimer) clearTimeout(teardownTimer)
+      }
     }
   }, [sessionRef])
 
