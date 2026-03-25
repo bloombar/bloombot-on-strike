@@ -40,16 +40,16 @@ The server implementation is available in Python.
 Assuming [pipenv](https://pipenv.pypa.io/en/latest/installation.html) is installed...
 
 ```bash
-cd ../python-server
+cd python-server
 pipenv install
 pipenv shell
 ```
 
 ## Configuration
 
-### OpenAI API Key
+### API Keys
 
-Note: You **must** add credits to your OpenAI account before running this demo. If your account has no credits, the demo will connect successfully, but the bot will not respond to anything you say in the meeting.
+Note: You **must** have API keys and some credits in your **OpenAI** and **LiveAvatar** accounts before running this demo. If your account has no credits, the demo may connect successfully, but the bot will not respond to anything you say in the meeting.
 
 #### Client configuration
 
@@ -57,13 +57,13 @@ In the `client` directory, copy the `.env.example` file and rename it to `.env`.
 
 #### Python Server Configuration
 
-In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your keys. The PORT is optional and defaults to `8001` if not specified.
+In the `python-server` directory, copy the `.env.example` file and rename it to `.env`. Then, add your keys.
 
 Update the `bot-config.yml` with details about your course(s). Include any OpenAI Responses API [Chat Prompts](https://developers.openai.com/api/docs/guides/prompting#create-a-prompt) that you have set up and [vector store files](https://developers.openai.com/api/reference/resources/vector_stores/subresources/files/methods/create) you have uploaded.
 
 ## Quickstart
 
-1. Start your backend server and expose it using ngrok:
+1. Start your backend server:
 
 Python:
 
@@ -90,11 +90,21 @@ This will output the URL of your local web server, e.g. `http://localhost:5173`.
 
 3. Load this client URL in web browser with the parameters it needs, including `wss` that shows where to find the server (using the ngrok URL or raw localhost server URL), the `course` title of the course that matches one of your courses listed in your `bot_config.yml`, and the `url` of a slide deck you'd like the bot to present on your behalf (defaults to example slide deck we have created).
 
+```txt
 http://localhost:5173/?wss=ws://localhost:8001&course=Software+Engineering
+```
 
 ## Attach to Zoom call
 
-1. Add the bot to a Zoom acll by sending the following curl request, replacing `YOUR_RECALL_TOKEN`, `YOUR_NGROK_SERVER_URL`, and other placeholders with your values:
+1. Add the bot to a Zoom call by sending a request to the Recall.ai API. This request has been automated in the `run.py` script, using settings in the `.env` file.
+
+Take a look and update as necessary. Execute that:
+
+```python
+python run.py
+```
+
+This Python script sends the equivalent of the following raw curl request, with `YOUR_RECALL_TOKEN`, `YOUR_NGROK_SERVER_URL`, and other placeholders swapped out with values from your `.env` file.
 
 ```bash
 curl --request POST \
@@ -121,12 +131,6 @@ curl --request POST \
   }'
 ```
 
-This command has been automated in the `run.py` script, using settings in the `.env` file. Take a look and update as necessary. Execute that:
-
-```python
-python run.py
-```
-
 The bot will join your meeting URL and stream the demo webpage's content directly to your meeting.
 
 If you'd like to customize the webpage shown by the bot, or change the interaction with the OpenAI agent, follow the complete setup instructions below.
@@ -139,7 +143,6 @@ Navigate to the client directory and start the development server:
 
 ```bash
 cd client
-npm install
 npm run dev
 ```
 
@@ -168,14 +171,4 @@ Once the frontend is deployed on a hosting service, update your bot configuratio
 }
 ```
 
-Using this, you will be able to interact with a customized voice agent.
-
-## Acknowledgements
-
-This project incorporates code from [OpenAI's real-time API demo](https://github.com/openai/openai-realtime-console), which is under the MIT License.
-
-## FAQ
-
-### The webpage shows that my bot is connected, why isn't it replying to me in the meeting?
-
-If the webpage is showing a successful connection but the bot isn't speaking, it's likely that you need to add credits to your OpenAI account. If your account has no credits, the demo will connect successfully, but the bot will not respond to anything you say in the meeting.
+Using this, you will be able to interact with a customized voice agent via Zoom.
