@@ -364,20 +364,13 @@ export function App() {
         >
           <div
             className={
-              'avatar-container w-[240px] h-[240px] rounded-full overflow-hidden shadow-lg border-4 border-white/10 flex items-center justify-center relative bg-white'
+              'avatar-container w-[240px] h-[240px] rounded-full overflow-hidden shadow-lg border-4 border-white/10 flex items-center justify-center bg-white'
             }
           >
             {!sessionActive ? (
               avatarLoading ? (
                 <Spinner />
-              ) : (
-                <button
-                  onClick={handleStartSession}
-                  className="px-6 py-2 text-base rounded bg-green-600 hover:bg-green-700 text-white font-semibold shadow absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                >
-                  {`Start ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`}
-                </button>
-              )
+              ) : null
             ) : (
               liveAvatarSessionToken && (
                 <LiveAvatarSession
@@ -392,16 +385,26 @@ export function App() {
               )
             )}
           </div>
-          {sessionActive && (
-            <div className="mt-4 text-center">
-              <button
-                onClick={handleStopSession}
-                className="px-6 py-2 text-base rounded bg-red-600 hover:bg-red-700 text-white font-semibold shadow"
-              >
-                {`Stop ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`}
-              </button>
-            </div>
-          )}
+          {/* BEGIN START/STOP buttons */}
+          {!sessionActive && !avatarLoading ? (
+            <button
+              onClick={handleStartSession}
+              className="px-6 py-2 text-base rounded bg-green-600 hover:bg-green-700 text-white font-semibold shadow absolute left-0 right-0 mx-auto bottom-2 opacity-70"
+            >
+              {/* {`Start ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`} */}
+              {`Start`}
+            </button>
+          ) : null}
+          {sessionActive && !avatarLoading ? (
+            <button
+              onClick={handleStopSession}
+              className="px-6 py-2 text-base rounded bg-red-600 hover:bg-red-700 text-white font-semibold shadow absolute left-0 right-0 mx-auto bottom-2 opacity-70"
+            >
+              {/* {`Stop ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`} */}
+              {`Stop`}
+            </button>
+          ) : null}
+          {/* END START/STOP buttons */}
         </div>
       </Draggable>
 
