@@ -10,7 +10,7 @@ Launch the front-end client into a Zoom call using the Recall AI API
 #   --header 'content-type: application/json' \
 #   --data '{
 #     "meeting_url": "https://us05web.zoom.us/j/87596751787?pwd=bgKLDL6day8RiNtgTLzxfrDtt1MDNu.1",
-#     "bot_name": "Bloombot-on-Strike",
+#     "VITE_BOT_NAME": "Bloombot-on-Strike",
 #     "output_media": {
 #       "camera": {
 #         "kind": "webpage",
@@ -39,7 +39,7 @@ CONFIG_PATH = Path(__file__).with_name("recallai-config.json")
 API_URL = os.getenv("RECALLAI_API_URL", "https://us-west-2.recall.ai/api/v1/bot/")
 API_TOKEN = os.getenv("RECALLAI_API_TOKEN")  # RECALLAI_API_TOKEN="your-token"
 MEETING_URL = os.getenv("MEETING_URL")  # MEETING_URL="https://zoom.us/..."
-BOT_NAME = os.getenv("BOT_NAME", "Bloombot-on-Strike")
+VITE_BOT_NAME = os.getenv("VITE_BOT_NAME", "Bloombot-on-Strike")
 
 # the web page the bot will screenshare in the meeting
 SCREENSHARE_WEBPAGE_URL = os.getenv(
@@ -53,7 +53,7 @@ Recall AI Bot Configuration:
 - API_URL: {API_URL}    
 - API_TOKEN: {API_TOKEN}
 - MEETING_URL: {MEETING_URL}
-- BOT_NAME: {BOT_NAME}
+- VITE_BOT_NAME: {VITE_BOT_NAME}
 - SCREENSHARE_WEBPAGE_URL: {SCREENSHARE_WEBPAGE_URL}
 """
 )
@@ -71,7 +71,7 @@ def main() -> int:
     # Recall.ai config data
     payload = {
         "meeting_url": MEETING_URL,
-        "bot_name": BOT_NAME,
+        "VITE_BOT_NAME": VITE_BOT_NAME,
         "output_media": {
             "camera": {
                 "kind": "webpage",

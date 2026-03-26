@@ -10,10 +10,11 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from websockets.asyncio.server import serve
-from live_avatar_helpers import *
+
+from live_avatar_api import LiveAvatarAPI
 
 import websockets
-import openai
+
 from openai import OpenAI
 
 logging.basicConfig(
@@ -44,9 +45,9 @@ if not OPENAI_API_KEY:
 openai_conversations = {}  # will hold separate threads keyed by client browser URL
 openai_client = OpenAI()
 
-# start HeyGen LiveAvatar session
-# liveavatar_session = get_liveavatar_session(LIVEAVATAR_API_KEY, LIVEAVATAR_AVATAR_ID, LIVEAVATAR_VOICE_ID, LIVEAVATAR_CONTEXT_ID)
-# start_liveavatar_session(liveavatar_session["session_token"])
+
+# Initialize LiveAvatar API client
+liveavatar_api = LiveAvatarAPI(api_key=LIVEAVATAR_API_KEY)
 
 # load the config data from file
 with open(CONFIG_FILE, encoding="utf-8", mode="r") as f:
@@ -100,16 +101,10 @@ async def handler(websocket):
                         # },
                         {
                             "role": "system",
-                            "content": f'Today, you are a bot named "ScabBot" who is a scab covering for Professor Amos Bloomberg. Prof. Bloomberg is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf to the class today, showing how the situation can be handled through education automation.',
+                            "content": "Today, you are a bot named 'ScabBot' who is a scab covering for Professor Amos Bloomberg. Prof. Bloomberg is currently on strike with the NYU Contract Faculty Union. You will be delivering lecture on his behalf to the class today, showing how the situation can be handled through education automation.",
                         },
                     ],
                     metadata={"client_url": f"{client_url}"},
-                )
-                # save conversation ID for later reference
-                oa_converstion_id = openai_conversations[client_url].id
-
-                logger.debug(
-                    f"OpenAI Conversation #{oa_conversation_id} for URL {client_url}"
                 )
 
                 # send a handshake confirmation back to client
@@ -231,12 +226,11 @@ async def handler(websocket):
                 )
             elif event["type"] == "request_liveavatar_token":
                 # get a session token from LiveAvatar API (client SDK will start the session)
-                liveavatar_session = get_liveavatar_session(
-                    LIVEAVATAR_API_KEY,
-                    LIVEAVATAR_AVATAR_ID,
-                    LIVEAVATAR_VOICE_ID,
-                    LIVEAVATAR_CONTEXT_ID,
-                    LIVEAVATAR_SANDBOX_MODE,
+                liveavatar_session = liveavatar_api.get_session(
+                    avatar_id=LIVEAVATAR_AVATAR_ID,
+                    voice_id=LIVEAVATAR_VOICE_ID,
+                    context_id=LIVEAVATAR_CONTEXT_ID,
+                    sandbox_mode=LIVEAVATAR_SANDBOX_MODE,
                 )
                 logger.info(
                     f"LiveAvatar session token obtained: {liveavatar_session['session_token']}"
@@ -253,6 +247,31 @@ async def handler(websocket):
                         }
                     )
                 )
+            elif event["type"] == "close_liveavatar_session":
+                token = event["data"].get("token")
+                if token:
+                    close_resp = liveavatar_api.close_session(token)
+                    logger.info(f"Closed LiveAvatar session: {close_resp}")
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "response_close_liveavatar_session",
+                                "data": {"success": True, "response": close_resp},
+                            }
+                        )
+                    )
+                else:
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "response_close_liveavatar_session",
+                                "data": {
+                                    "success": False,
+                                    "error": "No token provided",
+                                },
+                            }
+                        )
+                    )
     except websockets.exceptions.ConnectionClosedError:
         logger.info("Client disconnected unexpectedly")
 

@@ -114,7 +114,7 @@ curl --request POST \
   --header 'content-type: application/json' \
   --data '{
     "meeting_url": "YOUR_MEETING_URL",
-    "bot_name": "Recall.ai Notetaker",
+    "VITE_BOT_NAME": "Recall.ai Notetaker",
     "output_media": {
       "camera": {
         "kind": "webpage",

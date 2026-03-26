@@ -1,8 +1,25 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+// Simple spinner component
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center w-full h-full">
+      <svg
+        className="animate-spin h-12 w-12 text-gray-400"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+      </svg>
+    </div>
+  )
+}
+import Draggable from 'react-draggable'
 import useWebSocket, { ReadyState } from 'react-use-websocket'
 import { SessionInteractivityMode } from '@heygen/liveavatar-web-sdk'
 import { LiveAvatarSession } from './LiveAvatarSession'
-import './App.css'
+import './index.css'
 
 export type SessionMode = 'FULL' | 'FULL_PTT' | 'LITE'
 
@@ -26,7 +43,10 @@ export function App() {
   const [messageHistory, setMessageHistory] = useState<{}[]>([])
   const [awaitingTextToSpeak, setAwaitingTextToSpeak] = useState(false)
   const [liveAvatarSessionToken, setLiveAvatarSessionToken] = useState('')
+  const [sessionActive, setSessionActive] = useState(false)
   const [textToSpeak, setTextToSpeak] = useState('')
+  // Track loading state for avatar session
+  const [avatarLoading, setAvatarLoading] = useState(false)
   const [mode, setMode] = useState<SessionMode>('FULL')
   const lectureReadyRef = useRef(false)
   const lectureStartedRef = useRef(false)
@@ -35,6 +55,19 @@ export function App() {
   const silenceTimeoutRef = useRef<number>(0)
   const lastTokenRequestTimeRef = useRef<number>(0)
   const tokenRequestPendingRef = useRef(false)
+
+  // Draggable avatar state (react-draggable)
+  // Ensure avatar starts within visible area, with a minimum margin
+  const AVATAR_WIDTH = 240
+  const AVATAR_HEIGHT = 240
+  const MARGIN = 32
+  const [avatarPos, setAvatarPos] = useState({
+    x: Math.max(window.innerWidth - AVATAR_WIDTH - MARGIN, MARGIN),
+    y: Math.max(window.innerHeight - AVATAR_HEIGHT - MARGIN, MARGIN),
+  })
+  const handleDrag = (e: any, data: any) => {
+    setAvatarPos({ x: data.x, y: data.y })
+  }
 
   // require a valid URL for the websocket relay server
   const errorMessage = !RELAY_SERVER_URL
@@ -129,18 +162,35 @@ export function App() {
         lecture_notes: markdownSource,
       },
     })
-    // only request a LiveAvatar token once per connection
+    // Do not request a LiveAvatar token by default
+  }, [markdownSource])
+
+  // Start a new session by requesting a token
+  const handleStartSession = () => {
     if (!handshakeSentRef.current) {
       handshakeSentRef.current = true
-      tokenRequestPendingRef.current = true
-      lastTokenRequestTimeRef.current = Date.now()
-      sendJsonMessage({
-        type: 'request_liveavatar_token',
-        data: null,
-      })
-      console.log('client requested liveavatar token')
     }
-  }, [markdownSource])
+    tokenRequestPendingRef.current = true
+    lastTokenRequestTimeRef.current = Date.now()
+    setAvatarLoading(true)
+    sendJsonMessage({
+      type: 'request_liveavatar_token',
+      data: null,
+    })
+    setSessionActive(true)
+  }
+
+  // Stop the session by sending a close request
+  const handleStopSession = () => {
+    if (liveAvatarSessionToken) {
+      sendJsonMessage({
+        type: 'close_liveavatar_session',
+        data: { token: liveAvatarSessionToken },
+      })
+    }
+    setLiveAvatarSessionToken('')
+    setSessionActive(false)
+  }
 
   // connectionStatus is human-readable version of readystate
   const connectionStatus = {
@@ -172,6 +222,11 @@ export function App() {
         console.log(`Received LiveAvatar token: ${data?.token}`)
         tokenRequestPendingRef.current = false
         setLiveAvatarSessionToken(data?.token) // store the token in state to pass to the LiveAvatarSession component
+        setSessionActive(true)
+        setAvatarLoading(false)
+      } else if (lastJsonMessage.type === 'response_close_liveavatar_session') {
+        setLiveAvatarSessionToken('')
+        setSessionActive(false)
       }
     }
   }, [lastJsonMessage])
@@ -294,30 +349,76 @@ export function App() {
   }, [iFrameLoaded])
 
   return (
-    <div className="app-container">
-      <iframe ref={iframeRef} onLoad={() => setIFrameLoaded(true)} className="course-frame" src={COURSE_URL} />
+    <div className="relative w-screen h-screen overflow-hidden font-sans">
+      <iframe
+        ref={iframeRef}
+        onLoad={() => setIFrameLoaded(true)}
+        className="fixed inset-0 w-screen h-screen border-0 z-0"
+        src={COURSE_URL}
+      />
 
-      {liveAvatarSessionToken && (
-        <div className="avatar-wrapper">
-          <div className="avatar-container">
-            <LiveAvatarSession
-              mode={mode}
-              sessionAccessToken={liveAvatarSessionToken}
-              voiceChatConfig={voiceChatConfig}
-              onSessionStopped={onSessionStopped}
-              textToSpeak={textToSpeak}
-              onSpeakingDone={onSpeakingDone}
-              isReconnect={isReconnectingRef.current}
-            />
+      <Draggable handle=".avatar-wrapper" position={avatarPos} onDrag={handleDrag} bounds="parent">
+        <div
+          className="avatar-wrapper draggable-avatar flex flex-col items-center max-w-full max-h-full absolute"
+          style={{ zIndex: 20 }}
+        >
+          <div
+            className={
+              'avatar-container w-[240px] h-[240px] rounded-full overflow-hidden shadow-lg border-4 border-white/10 flex items-center justify-center relative bg-white'
+            }
+          >
+            {!sessionActive ? (
+              avatarLoading ? (
+                <Spinner />
+              ) : (
+                <button
+                  onClick={handleStartSession}
+                  className="px-6 py-2 text-base rounded bg-green-600 hover:bg-green-700 text-white font-semibold shadow absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                >
+                  {`Start ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`}
+                </button>
+              )
+            ) : (
+              liveAvatarSessionToken && (
+                <LiveAvatarSession
+                  mode={mode}
+                  sessionAccessToken={liveAvatarSessionToken}
+                  voiceChatConfig={voiceChatConfig}
+                  onSessionStopped={onSessionStopped}
+                  textToSpeak={textToSpeak}
+                  onSpeakingDone={onSpeakingDone}
+                  isReconnect={isReconnectingRef.current}
+                />
+              )
+            )}
           </div>
-          <div className="avatar-name">ScabBot</div>
+          {sessionActive && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={handleStopSession}
+                className="px-6 py-2 text-base rounded bg-red-600 hover:bg-red-700 text-white font-semibold shadow"
+              >
+                {`Stop ${import.meta.env.VITE_BOT_NAME || 'ScabBot'}`}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </Draggable>
 
-      <div className="status-indicator">
-        <div className={`status-dot ${errorMessage ? 'disconnected' : connectionStatus}`} />
-        <div className="status-text">
-          <div className="status-label">
+      <div className="fixed left-1/2 bottom-3 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 bg-black/80 rounded-xl shadow-lg backdrop-blur w-[min(96vw,780px)]">
+        <div
+          className={`inline-block w-3 h-3 rounded-full flex-shrink-0 transition-colors duration-300 ${
+            errorMessage
+              ? 'bg-red-500'
+              : connectionStatus === 'connecting'
+                ? 'bg-yellow-400 animate-pulse'
+                : connectionStatus === 'connected'
+                  ? 'bg-green-500 animate-pulse-slow'
+                  : 'bg-gray-400'
+          }`}
+        />
+        <div className="flex items-center gap-2 text-sm min-w-0">
+          <div className="font-semibold text-gray-100 whitespace-nowrap">
             {errorMessage
               ? 'Error:'
               : connectionStatus === 'connecting'
@@ -326,9 +427,19 @@ export function App() {
                   ? 'Connected to:'
                   : 'Failed to connect to:'}
           </div>
-          <div className="status-url">{errorMessage || RELAY_SERVER_URL}</div>
+          <div className="text-gray-300 truncate">{errorMessage || RELAY_SERVER_URL}</div>
         </div>
       </div>
+      <style>{`
+        @keyframes animate-pulse-slow {
+          0% { opacity: 1; }
+          50% { opacity: 0.4; }
+          100% { opacity: 1; }
+        }
+        .animate-pulse-slow {
+          animation: animate-pulse-slow 2s infinite;
+        }
+      `}</style>
     </div>
   )
 }
