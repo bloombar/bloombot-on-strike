@@ -3,6 +3,7 @@ import {
   ConnectionQuality,
   LiveAvatarSession,
   SessionState,
+  SessionDisconnectReason,
   SessionEvent,
   VoiceChatEvent,
   VoiceChatState,
@@ -74,12 +75,18 @@ const useSessionState = (sessionRef: React.RefObject<LiveAvatarSession>) => {
           teardownTimer = null
         }
       })
+      const session = sessionRef.current
+      const handleDisconnected = (reason: SessionDisconnectReason) => {
+        console.warn('LiveAvatar session disconnected:', reason)
+      }
+      session.on(SessionEvent.SESSION_DISCONNECTED, handleDisconnected)
       sessionRef.current.on(SessionEvent.SESSION_STREAM_READY, () => {
         setIsStreamReady(true)
       })
       sessionRef.current.on(SessionEvent.SESSION_CONNECTION_QUALITY_CHANGED, setConnectionQuality)
       return () => {
         if (teardownTimer) clearTimeout(teardownTimer)
+        session.off(SessionEvent.SESSION_DISCONNECTED, handleDisconnected)
       }
     }
   }, [sessionRef])
@@ -198,7 +205,9 @@ export const LiveAvatarContextProvider = ({
     voiceChat: voiceChatConfig,
     apiUrl: import.meta.env.VITE_LIVEAVATAR_API_URL,
   }
-  const sessionRef = useRef<LiveAvatarSession>(new LiveAvatarSession(sessionAccessToken, config))
+  // Lazy initialiser: no new session per render (dev StrictMode may still run it twice; only one is started)
+  const [session] = useState(() => new LiveAvatarSession(sessionAccessToken, config))
+  const sessionRef = useRef<LiveAvatarSession>(session)
 
   const { sessionState, isStreamReady, connectionQuality } = useSessionState(sessionRef)
 
