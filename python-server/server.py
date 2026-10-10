@@ -38,6 +38,14 @@ LIVEAVATAR_CONTEXT_ID = os.getenv(
     "LIVEAVATAR_CONTEXT_ID", "ce85226d-1d53-48a8-9b56-efccce8c0f90"
 )
 LIVEAVATAR_SANDBOX_MODE = os.getenv("LIVEAVATAR_SANDBOX_MODE", "true").lower() == "true"
+# seconds; leave unset to use the subscription tier's limit (never 0)
+_max_duration = os.getenv("LIVEAVATAR_MAX_SESSION_DURATION", "").strip()
+try:
+    LIVEAVATAR_MAX_SESSION_DURATION = int(_max_duration) if _max_duration else None
+except ValueError:
+    raise ValueError(
+        f"LIVEAVATAR_MAX_SESSION_DURATION must be an integer number of seconds, got {_max_duration!r}"
+    ) from None
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY must be set in .env file")
 
@@ -231,6 +239,7 @@ async def handler(websocket):
                     voice_id=LIVEAVATAR_VOICE_ID,
                     context_id=LIVEAVATAR_CONTEXT_ID,
                     sandbox_mode=LIVEAVATAR_SANDBOX_MODE,
+                    max_session_duration=LIVEAVATAR_MAX_SESSION_DURATION,
                 )
                 logger.info(
                     f"LiveAvatar session token obtained: {liveavatar_session['session_token']}"

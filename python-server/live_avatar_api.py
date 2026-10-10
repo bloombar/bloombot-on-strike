@@ -19,7 +19,12 @@ class LiveAvatarAPI:
         self.api_key = api_key or os.getenv("LIVEAVATAR_API_KEY")
 
     def get_session(
-        self, avatar_id=None, voice_id=None, context_id=None, sandbox_mode=True
+        self,
+        avatar_id=None,
+        voice_id=None,
+        context_id=None,
+        sandbox_mode=True,
+        max_session_duration=None,
     ):
         """
         Get a session token from LiveAvatar API.
@@ -33,7 +38,6 @@ class LiveAvatarAPI:
             "avatar_id": avatar_id,
             "is_sandbox": sandbox_mode,
             "video_settings": {"quality": "very_high", "encoding": "VP8"},
-            "max_session_duration": 0,
             "avatar_persona": {
                 "voice_id": voice_id,
                 "context_id": context_id,
@@ -41,15 +45,27 @@ class LiveAvatarAPI:
             },
             "interactivity_type": "CONVERSATIONAL",
         }
+        # omit unless positive: 0 is not "unlimited", the server ends the session at once
+        if isinstance(max_session_duration, int) and max_session_duration > 0:
+            payload["max_session_duration"] = max_session_duration
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
             "X-API-KEY": self.api_key,
         }
         response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response = json.loads(response.text)
-        print(f"LiveAvatar API response: {response}")
-        return response["data"]
+        try:
+            body = json.loads(response.text)
+        except ValueError:
+            body = {}
+        print(f"LiveAvatar API response: {body}")
+        data = body.get("data") if isinstance(body, dict) else None
+        if not 200 <= response.status_code < 300 or not data:
+            detail = body.get("message") or body.get("detail") if isinstance(body, dict) else None
+            raise RuntimeError(
+                f"LiveAvatar token request failed (HTTP {response.status_code}): {detail or 'no data in response'}"
+            )
+        return data
 
     def start_session(self, token):
         """
