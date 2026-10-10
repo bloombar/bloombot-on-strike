@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [heygen-avatar, main]
+  push:
+    branches: [heygen-avatar, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24 # same Node as the client job and local runs; no npm cache needed
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Pipfile.lock is the source of truth (python-server/requirements.txt is incomplete).
+      # python.sh --clean runs `pipenv install --deploy`, verifies the lock, runs the unit tests.
+      - name: Install, verify lock, unit tests
+        run: |
+          pip install pipenv
+          scripts/ci/python.sh --clean
+
+      # workflow-lint needs PyYAML, which only this job's pipenv env has; with CI set, missing
+      # PyYAML fails these tests instead of skipping them.
+      - name: Workflow-lint self-tests
+        run: node --test scripts/ci/workflow-lint.test.mjs
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so the changed-file diff has a merge base
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      # All client logic lives in scripts/ci so local runs (scripts/ci/all.sh) match CI.
+      # --clean runs npm ci; the last step is the no-new-diagnostics gate: eslint + tsc on the
+      # current tree vs the merge-base with BASE, failing only on diagnostics that are new.
+      - name: Client checks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then BASE="origin/$BASE_REF"; else BASE="$PUSH_BEFORE"; fi
+          scripts/ci/client.sh --clean "$BASE"
+
+      # Needs client/node_modules, so it runs after the npm ci inside client.sh.
+      # (workflow-lint.test.mjs runs in the python job, which has PyYAML.)
+      - name: Gate self-tests
+        run: node --test scripts/ci/changed-checks.test.mjs
