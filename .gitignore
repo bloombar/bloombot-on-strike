@@ -154,3 +154,7 @@ typings/
 ## Jekyll artifacts
 **/.jekyll-cache
 **/_site/
+
+## Claude Code personal settings (per-user permissions, absolute local paths)
+.claude/settings.local.json
+.claude/worktrees/
