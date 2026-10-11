@@ -105,6 +105,8 @@ Every page URL has the same structure:
 | `wss` (**required**) | `ws://localhost:8001` (local server, `MODE=development`). `wss://seriousdata.org:8001` (production). `wss://<id>.ngrok-free.app` (local server through ngrok). |
 | `course` | A `title` from `python-server/bot_config.yml`, URL-encoded: spaces become `+`, `&` becomes `%26`. Default: `Software Engineering`. |
 | `url` | The slide deck to present, URL-encoded. Default: `https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/`. |
+| `autostart` | `1`, `true` or `yes` starts the avatar by itself once the server is connected and the slides are loaded. Default: off (click Start). Used by the Recall bot (section 6.7). |
+| `autostart_delay` | Seconds to wait before an autostart. Decimals allowed, clamped to 0-60. Default: `3`. |
 
 **Rules:**
 
@@ -121,8 +123,9 @@ Every page URL has the same structure:
 | deployed | production | `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Software+Engineering` |
 | deployed | ngrok | `https://bloombar.github.io/bloombot-on-strike/?wss=wss://<id>.ngrok-free.app&course=Software+Engineering` |
 | deployed, other course and deck | production | `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Agile+Software+Development+%26+DevOps&url=https%3A%2F%2Fknowledge.kitchen%2Fcontent%2Fcourses%2Fagile-development-and-devops%2Fslides%2F<deck>%2F` |
+| deployed, autostart after 5 s | production | `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Software+Engineering&autostart=1&autostart_delay=5` |
 
-In the last row, replace `<deck>` with a real deck's path and check the full path on knowledge.kitchen first.
+In the "other course and deck" row, replace `<deck>` with a real deck's path and check the full path on knowledge.kitchen first.
 
 **What you should see:**
 
@@ -323,6 +326,7 @@ On the droplet, run `pm2 describe scabbot` twice, a minute apart. The status sho
 - `RECALLAI_API_URL` and `RECALLAI_API_TOKEN`
 - `MEETING_URL`: the Zoom, Google Meet or Teams link
 - `SCREENSHARE_WEBPAGE_URL`: a deployed-client URL from section 4, for example `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Software+Engineering`
+- `AUTOSTART_DELAY_SECONDS` (optional, default 3): `run.py` adds `autostart=1` (and this delay as `autostart_delay`) to that URL, because nobody in the bot's browser can click Start. Params already in the URL are kept.
 
 Then run:
 
