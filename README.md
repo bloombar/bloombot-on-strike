@@ -96,42 +96,14 @@ http://localhost:5173/?wss=ws://localhost:8001&course=Software+Engineering
 
 ## Attach to Zoom call
 
-1. Add the bot to a Zoom call by sending a request to the Recall.ai API. This request has been automated in the `run.py` script, using settings in the `.env` file.
-
-Take a look and update as necessary. Execute that:
-
-```python
-python run.py
-```
-
-This Python script sends the equivalent of the following raw curl request, with `YOUR_RECALL_TOKEN`, `YOUR_NGROK_SERVER_URL`, and other placeholders swapped out with values from your `.env` file.
+`client/run.py` sends a [Recall.ai](https://www.recall.ai/) bot into a Zoom, Google Meet or Teams meeting. The bot shows the deployed client page, with the avatar starting automatically, as its camera. Set `RECALLAI_API_URL`, `RECALLAI_API_TOKEN`, `MEETING_URL`, `VITE_BOT_NAME` and `SCREENSHARE_WEBPAGE_URL` in `client/.env`, then run:
 
 ```bash
-curl --request POST \
-  --url https://us-east-1.recall.ai/api/v1/bot/ \
-  --header 'Authorization: YOUR_RECALL_TOKEN' \
-  --header 'accept: application/json' \
-  --header 'content-type: application/json' \
-  --data '{
-    "meeting_url": "YOUR_MEETING_URL",
-    "VITE_BOT_NAME": "Recall.ai Notetaker",
-    "output_media": {
-      "camera": {
-        "kind": "webpage",
-        "config": {
-          "url": "https://recallai-demo.netlify.app?wss=wss://YOUR_NGROK_SERVER_URL&course=YOUR_COURSE_TITLE"
-        }
-      }
-    },
-    "variant": {
-      "zoom": "web_4_core",
-      "google_meet": "web_4_core",
-      "microsoft_teams": "web_4_core"
-    }
-  }'
+cd client
+pipenv run python run.py
 ```
 
-The bot will join your meeting URL and stream the demo webpage's content directly to your meeting.
+See [DEVELOPMENT.md, section 6.7](DEVELOPMENT.md#67-putting-the-bot-in-a-zoom-call-recallai) for setup, the settings, how to remove the bot, costs, and what to check on a first run.
 
 If you'd like to customize the webpage shown by the bot, or change the interaction with the OpenAI agent, follow the complete setup instructions below.
 

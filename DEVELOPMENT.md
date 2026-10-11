@@ -321,19 +321,77 @@ On the droplet, run `pm2 describe scabbot` twice, a minute apart. The status sho
 
 ### 6.7 Putting the bot in a Zoom call (Recall.ai)
 
-`client/run.py` asks Recall.ai to send a bot into a meeting. The bot's camera shows a web page: the deployed client, with the production server in `wss`. Set these in `client/.env`:
+#### How it works
 
-- `RECALLAI_API_URL` and `RECALLAI_API_TOKEN`
-- `MEETING_URL`: the Zoom, Google Meet or Teams link
-- `SCREENSHARE_WEBPAGE_URL`: a deployed-client URL from section 4, for example `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Software+Engineering`
-- `AUTOSTART_DELAY_SECONDS` (optional, default 3): `run.py` adds `autostart=1` (and this delay as `autostart_delay`) to that URL, because nobody in the bot's browser can click Start. Params already in the URL are kept.
+`client/run.py` asks Recall.ai to send a bot into a meeting. The bot joins as an ordinary participant, with its own name and video tile.
 
-Then run:
+On Recall's servers, the bot opens the client page in a browser. That browser draws the page on a virtual screen, and Recall streams it into the meeting:
+
+- **What participants see:** the page (the slides plus the avatar) in the bot's video tile, because `run.py` asks for `output_media.camera`.
+- **What participants hear:** the avatar's speech, played by the page, comes through as the bot's microphone.
+
+The page still needs the relay server, so point its `wss` parameter at the production server (section 6.2) or an ngrok tunnel. It can't use `ws://localhost`, because Recall's browser is not on your machine.
+
+Nobody can click **Start** in Recall's browser. So `run.py` adds `autostart=1` to the page URL, and the page starts the avatar by itself once it is connected and the slides have loaded (section 4).
+
+#### One-time setup
+
+1. **Create a Recall.ai account and API key.** API keys are per region. Create one in the developer dashboard of the region you'll use, at `https://<region>.recall.ai/dashboard/developers/api-keys`.
+2. **Fill in `client/.env`** (copy it from `client/env.example`):
+
+   | Setting | Value |
+   | --- | --- |
+   | `RECALLAI_API_URL` | `https://<region>.recall.ai/api/v1/bot/`. The region must match your key's. Regions: `us-east-1`, `us-west-2`, `eu-central-1`, `ap-northeast-1`. Keep the trailing `/`. |
+   | `RECALLAI_API_TOKEN` | Your API key. `run.py` sends it as the `Authorization` header (with or without a `Token` prefix is fine). |
+   | `MEETING_URL` | The full Zoom, Google Meet or Teams join link, including any `?pwd=` passcode. |
+   | `VITE_BOT_NAME` | The bot's display name in the meeting, for example `ScabBot`. `run.py` sends it as Recall's `bot_name`. |
+   | `SCREENSHARE_WEBPAGE_URL` | The page the bot shows: a deployed-client URL from section 4, for example `https://bloombar.github.io/bloombot-on-strike/?wss=wss://seriousdata.org:8001&course=Software+Engineering`. |
+   | `AUTOSTART_DELAY_SECONDS` | Optional, default 3. Seconds to wait after the page is ready before the avatar starts. |
+
+   `run.py` adds `autostart=1`, and `autostart_delay` if set, to `SCREENSHARE_WEBPAGE_URL`. If the URL already has those parameters, it leaves them as they are.
+
+3. **Check the pieces work without Recall first:**
+   - `curl` the relay server and expect `HTTP 426` (section 6.6).
+   - Open `SCREENSHARE_WEBPAGE_URL` with `&autostart=1` in your own browser. The avatar should start by itself about 3 seconds after the slides load. Click the page once if your browser blocks audio until you interact with it.
+
+#### Sending the bot into a meeting
+
+1. Start the meeting yourself.
+2. Turn off the waiting room, or be ready to admit the bot. It joins under `VITE_BOT_NAME`.
+3. Run:
+
+   ```bash
+   cd client
+   pipenv run python run.py
+   ```
+
+   It prints its settings, with the API key masked, and then Recall's response. A successful request returns `HTTP 201` and a JSON bot object. **Note its `id`**, because you need it to remove the bot.
+
+4. In the meeting, the bot's tile should show the slides. The avatar should appear a few seconds after the slides load, then greet the room and narrate the slides as they advance.
+
+#### Removing the bot
+
+Ending the meeting removes the bot. To remove it while the meeting continues, use the `id` from step 3 above:
 
 ```bash
-cd client
-pipenv run python run.py
+curl -X POST "https://<region>.recall.ai/api/v1/bot/<id>/leave_call/" \
+  -H "Authorization: $RECALLAI_API_TOKEN"
 ```
+
+Removal is permanent for that bot; send a new one with `run.py`. When the bot's browser closes, the avatar session ends. Check `pm2 logs scabbot` and your LiveAvatar dashboard to confirm no session is left running.
+
+#### Costs
+
+Each run uses Recall.ai bot time, LiveAvatar session time and OpenAI calls, for as long as the bot stays in the meeting. Test with short meetings, and remove the bot when you're done.
+
+#### What hasn't been tested
+
+The full flow, with a real bot in a real meeting, hasn't been run since auto-start was added. The client tests and the `run.py` unit tests cover the parts that can be tested without one. On the first live run, watch for:
+
+- the bot being stuck in the waiting room;
+- a blank tile, which usually means `SCREENSHARE_WEBPAGE_URL` or `wss` is wrong;
+- the avatar not starting;
+- no sound.
 
 ## 7. Troubleshooting
 
