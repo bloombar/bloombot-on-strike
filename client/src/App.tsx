@@ -26,6 +26,22 @@ export type SessionMode = 'FULL' | 'FULL_PTT' | 'LITE'
 /** Minimum milliseconds between LiveAvatar token requests */
 const RECONNECT_COOLDOWN_MS = 10_000
 
+const DEFAULT_AUTOSTART_DELAY_S = 3
+const MAX_AUTOSTART_DELAY_S = 60
+
+/** `autostart` URL param: only 1/true/yes (any case) turn it on. */
+function parseAutostart(value: string | null): boolean {
+  return ['1', 'true', 'yes'].includes((value ?? '').trim().toLowerCase())
+}
+
+/** `autostart_delay` URL param in seconds: decimals allowed, clamped to 0-60, junk or empty -> default. */
+function parseAutostartDelay(value: string | null): number {
+  if (value === null || value.trim() === '') return DEFAULT_AUTOSTART_DELAY_S
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds)) return DEFAULT_AUTOSTART_DELAY_S
+  return Math.min(Math.max(seconds, 0), MAX_AUTOSTART_DELAY_S)
+}
+
 export function App() {
   const params = new URLSearchParams(window.location.search)
   const RELAY_SERVER_URL = params.get('wss')
@@ -35,6 +51,8 @@ export function App() {
     params.get('url') || 'https://knowledge.kitchen/content/courses/software-engineering/slides/continuous-integration/'
   const COURSE_ORIGIN = new URL(COURSE_URL).origin
   const COURSE_TITLE = params.get('course') || 'Software Engineering' // should come from query string
+  const AUTOSTART = parseAutostart(params.get('autostart'))
+  const AUTOSTART_DELAY_MS = parseAutostartDelay(params.get('autostart_delay')) * 1000
   const [markdownSource, setMarkdownSource] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [iFrameLoaded, setIFrameLoaded] = useState(false)
@@ -55,6 +73,11 @@ export function App() {
   const silenceTimeoutRef = useRef<number>(0)
   const lastTokenRequestTimeRef = useRef<number>(0)
   const tokenRequestPendingRef = useRef(false)
+  // true once the handshake has actually been sent to the relay (autostart waits for this)
+  const [handshakeSent, setHandshakeSent] = useState(false)
+  // set when the session has been started (by autostart or by the Start button), so autostart fires at most once
+  const autostartDoneRef = useRef(false)
+  const handleStartSessionRef = useRef<() => void>(() => {})
 
   // Draggable avatar state (react-draggable)
   // Ensure avatar starts within visible area, with a minimum margin
@@ -148,11 +171,7 @@ export function App() {
     })
   }, [sendJsonMessage])
 
-  useEffect(() => {
-    // wait until we actually have lecture content before handshaking
-    if (!markdownSource) return
-
-    // send confirmation message to server once we have the lecture content
+  const sendHandshake = () => {
     sendJsonMessage({
       type: 'handshake',
       data: {
@@ -162,11 +181,42 @@ export function App() {
         lecture_notes: markdownSource,
       },
     })
+    setHandshakeSent(true)
+  }
+
+  useEffect(() => {
+    // wait until we actually have lecture content before handshaking
+    if (!markdownSource) return
+
+    // send confirmation message to server once we have the lecture content
+    sendHandshake()
     // Do not request a LiveAvatar token by default
   }, [markdownSource])
 
+  // The relay keeps handshake state per connection. When autostart is on and the socket drops and re-opens (for
+  // example the relay restarts), the new connection has not seen our handshake, so forget it and send it again
+  // before autostart may request a token. The first open is not a reconnect: a handshake sent before it is queued by
+  // react-use-websocket and flushed on open.
+  const socketWasOpenRef = useRef(false)
+  const socketReopenedRef = useRef(false)
+  useEffect(() => {
+    if (readyState !== ReadyState.OPEN) {
+      if (socketWasOpenRef.current) {
+        socketWasOpenRef.current = false
+        socketReopenedRef.current = true
+        if (AUTOSTART) setHandshakeSent(false)
+      }
+      return
+    }
+    socketWasOpenRef.current = true
+    if (AUTOSTART && socketReopenedRef.current && markdownSource) sendHandshake()
+    // Only socket transitions should trigger this; adding markdownSource would re-send the handshake on slide changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyState])
+
   // Start a new session by requesting a token
   const handleStartSession = () => {
+    autostartDoneRef.current = true // a manual click cancels any pending autostart
     if (!handshakeSentRef.current) {
       handshakeSentRef.current = true
     }
@@ -179,6 +229,22 @@ export function App() {
     })
     setSessionActive(true)
   }
+
+  handleStartSessionRef.current = handleStartSession
+
+  // Autostart (opt-in via ?autostart=1): when this page is rendered by a Recall.ai meeting bot there is no human to
+  // click Start, so start the session ourselves once the relay is connected, the slides are loaded and the handshake
+  // has been sent. The timer is cleared on cleanup (websocket drop, StrictMode re-run) and re-armed when ready again;
+  // autostartDoneRef guarantees a single start per page load. Later reconnects go through onSessionStopped.
+  const autostartReady = AUTOSTART && readyState === ReadyState.OPEN && !!markdownSource && handshakeSent
+  useEffect(() => {
+    if (!autostartReady || autostartDoneRef.current) return
+    const timer = window.setTimeout(() => {
+      if (autostartDoneRef.current) return
+      handleStartSessionRef.current()
+    }, AUTOSTART_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [autostartReady, AUTOSTART_DELAY_MS])
 
   // Stop the session by sending a close request
   const handleStopSession = () => {

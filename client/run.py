@@ -10,7 +10,7 @@ Launch the front-end client into a Zoom call using the Recall AI API
 #   --header 'content-type: application/json' \
 #   --data '{
 #     "meeting_url": "https://us05web.zoom.us/j/87596751787?pwd=bgKLDL6day8RiNtgTLzxfrDtt1MDNu.1",
-#     "VITE_BOT_NAME": "Bloombot-on-Strike",
+#     "bot_name": "Bloombot-on-Strike",
 #     "output_media": {
 #       "camera": {
 #         "kind": "webpage",
@@ -30,6 +30,8 @@ import json
 import os
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 import requests
 from dotenv import load_dotenv
 
@@ -47,16 +49,30 @@ SCREENSHARE_WEBPAGE_URL = os.getenv(
     "https://recallai-demo.netlify.app?wss=wss://bloombar.github.io/bloombot-on-strike/",
 )
 
-print(
-    f"""
-Recall AI Bot Configuration:
-- API_URL: {API_URL}    
-- API_TOKEN: {API_TOKEN}
-- MEETING_URL: {MEETING_URL}
-- VITE_BOT_NAME: {VITE_BOT_NAME}
-- SCREENSHARE_WEBPAGE_URL: {SCREENSHARE_WEBPAGE_URL}
-"""
-)
+def with_autostart(url: str, delay: str | None = None) -> str:
+    """
+    Return `url` with `autostart=1` added (and `autostart_delay` if given), keeping its other query params.
+    Params already present in the URL are left alone. The Recall bot has no human to click Start, so the
+    client starts the avatar by itself when it sees `autostart`.
+    """
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    present = {key for key, _ in query}
+    if "autostart" not in present:
+        query.append(("autostart", "1"))
+    if delay and "autostart_delay" not in present:
+        query.append(("autostart_delay", delay))
+    # safe=":/" keeps values such as wss=wss://host:8001 readable instead of percent-encoding them
+    return urlunsplit(parts._replace(query=urlencode(query, safe=":/")))
+
+
+def mask(secret: str | None) -> str:
+    """Show only the last 4 characters of a secret; short secrets are hidden entirely."""
+    if not secret:
+        return "None"
+    if len(secret) <= 8:
+        return "****"
+    return "****" + secret[-4:]
 
 
 def main() -> int:
@@ -68,14 +84,26 @@ def main() -> int:
         print("Missing MEETING_URL environment variable.", file=sys.stderr)
         return 1
 
+    screenshare_url = with_autostart(SCREENSHARE_WEBPAGE_URL, os.getenv("AUTOSTART_DELAY_SECONDS"))
+    print(
+        f"""
+Recall AI Bot Configuration:
+- API_URL: {API_URL}
+- API_TOKEN: {mask(API_TOKEN)}
+- MEETING_URL: {MEETING_URL}
+- VITE_BOT_NAME: {VITE_BOT_NAME}
+- SCREENSHARE_WEBPAGE_URL: {screenshare_url}
+"""
+    )
+
     # Recall.ai config data
     payload = {
         "meeting_url": MEETING_URL,
-        "VITE_BOT_NAME": VITE_BOT_NAME,
+        "bot_name": VITE_BOT_NAME,
         "output_media": {
             "camera": {
                 "kind": "webpage",
-                "config": {"url": SCREENSHARE_WEBPAGE_URL},
+                "config": {"url": screenshare_url},
             }
         },
         "variant": {
